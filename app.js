@@ -664,7 +664,8 @@ async function startDirectCall(kind) {
       $("mediaEyebrow").textContent = "LIVE VIDEO • CAMERA + MIC";
       $("mediaTitle").textContent = "Video Call";
     }
-    notifyPartnerCall(kind === "video-call" ? "video" : "phone");\n    currentCall = peer.call(partnerPeerId, outgoingStream, {metadata:{type:kind}});
+    notifyPartnerCall(kind === "video-call" ? "video" : "phone");
+    currentCall = peer.call(partnerPeerId, outgoingStream, {metadata:{type:kind}});
     if (!currentCall) throw new Error("Could not start the call.");
     activeCallKind = kind;
     audioSender = null;
