@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#080b18">
+<title>SHADOW NINJA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="game-container">
+  <header>
+    <div class="logo">SHADOW <span>NINJA</span></div>
+    <div class="stats">
+      <span>⭐ <b id="score">0</b></span>
+      <span>❤️ <b id="health">3</b></span>
+      <span>👹 <b id="bossHealth">—</b></span>
+    </div>
+  </header>
+  <div class="game-box">
+    <canvas id="gameCanvas" width="900" height="500"></canvas>
+    <div id="startScreen" class="screen">
+      <h1>SHADOW NINJA</h1><p>DEFEAT THE DEMON BOSS</p>
+      <p class="hint">Move: ◀ ▶ &nbsp; Jump: ▲ &nbsp; Attack: ⚔</p>
+      <button id="startBtn">START GAME</button>
+    </div>
+    <div id="gameOverScreen" class="screen hidden">
+      <h1>GAME OVER</h1><p>YOUR SCORE: <span id="finalScore">0</span></p>
+      <button id="restartBtn">PLAY AGAIN</button>
+    </div>
+    <div id="winScreen" class="screen hidden">
+      <h1>VICTORY!</h1><p>The Demon Boss has been defeated.</p>
+      <button id="nextBtn">PLAY AGAIN</button>
+    </div>
+  </div>
+  <div class="mobile-controls">
+    <div class="movement"><button id="leftBtn">◀</button><button id="rightBtn">▶</button></div>
+    <div class="actions"><button id="attackBtn">⚔</button><button id="jumpBtn">⬆</button></div>
+  </div>
+  <footer>MOBILE ADVENTURE • SOUND ON AFTER START</footer>
+</div>
+<script src="game.js"></script>
+</body>
+</html>
