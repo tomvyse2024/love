@@ -683,3 +683,21 @@ footer span {
   .call-card.video-call-mode .video-box{height:260px}
   .call-card.video-call-mode .video-box.self{height:210px}
 }
+
+
+/* Push notification setup */
+.notification-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+.notification-row small{
+  color:var(--muted);
+  font-size:10px;
+  line-height:1.5;
+}
+@media(max-width:620px){
+  .notification-row .btn{width:100%}
+}
