@@ -517,3 +517,128 @@ $("endBtn").addEventListener("click", () => {
 $("createBtn").addEventListener("click", createRoom);
 $("joinBtn").addEventListener("click", joinRoom);
 $("chatInput").disabled = true;
+
+
+/* =========================
+   V2: MOVIE UPLOAD + WATCH TOGETHER
+   Transfers a temporary video copy over the existing PeerJS data connection.
+   ========================= */
+const moviePlayer = $("moviePlayer");
+const movieInput = $("movieFile");
+const movieStatus = $("movieStatus");
+const movieProgress = $("movieProgress");
+const movieProgressBar = $("movieProgressBar");
+let movieSyncLock = false;
+let incomingMovie = null;
+let movieObjectUrl = null;
+const MOVIE_CHUNK_SIZE = 64 * 1024;
+const MOVIE_MAX_SIZE = 250 * 1024 * 1024;
+
+function movieSay(message) {
+  if (movieStatus) movieStatus.textContent = message;
+}
+
+function movieLoad(blob, name) {
+  if (movieObjectUrl) URL.revokeObjectURL(movieObjectUrl);
+  movieObjectUrl = URL.createObjectURL(blob);
+  moviePlayer.src = movieObjectUrl;
+  $("movieFileName").textContent = name || "Shared movie";
+  movieSay("Movie ready ♡ Press play when you're ready.");
+}
+
+$("movieChooseBtn").addEventListener("click", () => movieInput.click());
+
+movieInput.addEventListener("change", async () => {
+  const file = movieInput.files && movieInput.files[0];
+  if (!file) return;
+  if (!(file.type.startsWith("video/") || /\.(mp4|webm|mov|m4v)$/i.test(file.name))) {
+    movieSay("Please choose a supported video file (MP4, WebM, MOV or M4V).");
+    movieInput.value = "";
+    return;
+  }
+  if (file.size > MOVIE_MAX_SIZE) {
+    movieSay("This V2 version supports files up to 250 MB.");
+    movieInput.value = "";
+    return;
+  }
+  movieLoad(file, file.name);
+  if (!dataConn || !dataConn.open) {
+    movieSay("Movie loaded on this device. Connect to your partner to send it to them.");
+    return;
+  }
+  try {
+    $("movieChooseBtn").disabled = true;
+    movieProgress.hidden = false;
+    movieProgressBar.style.width = "0%";
+    const total = Math.ceil(file.size / MOVIE_CHUNK_SIZE);
+    dataConn.send({type:"movie-start", name:file.name, mime:file.type || "video/mp4", size:file.size, total});
+    for (let i=0;i<total;i++) {
+      if (!dataConn || !dataConn.open) throw new Error("Connection closed during transfer.");
+      const chunk = file.slice(i*MOVIE_CHUNK_SIZE, Math.min(file.size,(i+1)*MOVIE_CHUNK_SIZE));
+      dataConn.send(chunk);
+      movieProgressBar.style.width = Math.round(((i+1)/total)*100)+"%";
+      if (i % 8 === 0) await new Promise(resolve => setTimeout(resolve, 12));
+    }
+    dataConn.send({type:"movie-end", name:file.name});
+    movieSay("Movie sent to your partner ♡");
+  } catch (error) {
+    console.error("Movie transfer:", error);
+    movieSay("Movie transfer stopped. Check the connection and try again.");
+  } finally {
+    $("movieChooseBtn").disabled = false;
+  }
+});
+
+function handleMovieData(data) {
+  if (data && typeof data === "object" && data.type === "movie-start") {
+    incomingMovie = {name:data.name || "Shared movie", mime:data.mime || "video/mp4", size:data.size, total:data.total, chunks:[], received:0};
+    movieProgress.hidden = false;
+    movieProgressBar.style.width = "0%";
+    movieSay("Receiving " + incomingMovie.name + "…");
+    return;
+  }
+  if (data && typeof data === "object" && data.type === "movie-end") {
+    if (!incomingMovie) return;
+    const movie = incomingMovie;
+    incomingMovie = null;
+    const blob = new Blob(movie.chunks, {type:movie.mime});
+    movieLoad(blob, movie.name);
+    movieProgressBar.style.width = "100%";
+    movieSay("Movie received successfully ♡ Press play to watch together.");
+    return;
+  }
+  if (data && typeof data === "object" && data.type === "movie-sync") {
+    if (!moviePlayer.src) return;
+    movieSyncLock = true;
+    if (Number.isFinite(data.time)) {
+      const drift = Math.abs((moviePlayer.currentTime || 0) - data.time);
+      if (drift > 0.8) moviePlayer.currentTime = data.time;
+    }
+    if (data.action === "play") moviePlayer.play().catch(() => movieSay("Tap play once to allow movie playback."));
+    if (data.action === "pause") moviePlayer.pause();
+    setTimeout(() => { movieSyncLock = false; }, 250);
+    return;
+  }
+  if (data instanceof Blob || data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+    if (!incomingMovie) return;
+    const part = data instanceof Blob ? data : new Blob([data]);
+    incomingMovie.chunks.push(part);
+    incomingMovie.received += part.size;
+    movieProgressBar.style.width = Math.min(99,Math.round(incomingMovie.received/incomingMovie.size*100))+"%";
+  }
+}
+
+// Add a second data listener without disturbing the existing chat listener.
+const attachConnectionV2 = attachConnection;
+attachConnection = function(conn) {
+  attachConnectionV2(conn);
+  conn.on("data", handleMovieData);
+};
+
+function sendMovieSync(action) {
+  if (movieSyncLock || !dataConn || !dataConn.open || !moviePlayer.src) return;
+  dataConn.send({type:"movie-sync", action, time:moviePlayer.currentTime || 0});
+}
+moviePlayer.addEventListener("play", () => sendMovieSync("play"));
+moviePlayer.addEventListener("pause", () => sendMovieSync("pause"));
+moviePlayer.addEventListener("seeked", () => sendMovieSync("seek"));
