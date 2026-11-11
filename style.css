@@ -506,3 +506,10 @@ footer span {
 .role-status{padding:12px;border:1px solid var(--line);border-radius:10px;background:#170f23;color:#e8b6cb;font-size:11px;line-height:1.6;min-height:42px}
 #callPartnerBtn{flex:1}
 @media(max-width:420px){.role-buttons{gap:8px}.role-btn{min-height:100px}}
+
+
+/* Layout and call-control polish */
+.video-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}
+#shareBtn{border-color:rgba(242,138,181,.55);background:linear-gradient(145deg,#3a263e,#2a1d37)}
+#shareBtn:not(:disabled){box-shadow:0 0 0 1px rgba(242,138,181,.12)}
+@media(max-width:620px){.video-grid{grid-template-columns:1fr}}
