@@ -9,6 +9,7 @@ let mySide = null;
 let partnerPeerId = null;
 let dataConn = null;
 let dataRetryTimer = null;
+let dataConnectTimeout = null;
 
 let currentCall = null;
 let localStream = null;       // Microphone stream.
@@ -331,6 +332,10 @@ function attachConnection(conn) {
   dataConn = conn;
 
   conn.on("open", () => {
+    if (dataConnectTimeout) {
+      clearTimeout(dataConnectTimeout);
+      dataConnectTimeout = null;
+    }
     if (dataConn !== conn) return;
     setStatus("Connected with your person", true);
     enableChatControls();
@@ -348,6 +353,10 @@ function attachConnection(conn) {
   });
 
   conn.on("close", () => {
+    if (dataConnectTimeout) {
+      clearTimeout(dataConnectTimeout);
+      dataConnectTimeout = null;
+    }
     if (dataConn === conn) {
       dataConn = null;
       $("chatInput").disabled = true;
@@ -360,7 +369,12 @@ function attachConnection(conn) {
 
   conn.on("error", error => {
     console.warn("Data connection:", error);
+    if (dataConnectTimeout) {
+      clearTimeout(dataConnectTimeout);
+      dataConnectTimeout = null;
+    }
     if (dataConn === conn && !conn.open) dataConn = null;
+    try { conn.close(); } catch (_) {}
     updateRoleButtons();
   });
 }
@@ -443,7 +457,7 @@ function setupPeer(peerId) {
       console.error("Peer error:", error);
       setStatus("Connection error: " + error.type);
       if (error.type === "peer-unavailable") {
-        setRoleStatus("Partner online မဖြစ်သေးပါ။ သူ့ဘက်က Website ဖွင့်ပြီး Side ရွေးထားဖို့လိုပါတယ်။");
+        setRoleStatus("Partner ရဲ့ Peer ID ကို ခဏမတွေ့သေးပါ။ အလိုအလျောက် ပြန်ချိတ်နေပါတယ်…");
       }
     });
 
@@ -522,21 +536,45 @@ function tryDataConnection() {
 
   if (dataConn) {
     if (dataConn.open) return;
-    // A pending/closed channel must not block future connection attempts.
+    // Do not let a failed or stalled attempt block automatic retries.
     if (dataConn.open === false && dataConn.peerConnection &&
         dataConn.peerConnection.connectionState === "closed") {
       try { dataConn.close(); } catch (_) {}
       dataConn = null;
-    } else if (dataConn.open === false) {
+    } else if (dataConn.open === false && dataConnectTimeout) {
       return;
+    } else if (dataConn.open === false) {
+      try { dataConn.close(); } catch (_) {}
+      dataConn = null;
     }
   }
 
   const conn = peer.connect(partnerPeerId, {reliable:true});
+  if (!conn) return;
   attachConnection(conn);
+
+  // PeerJS can return a pending channel even when the partner ID is not
+  // reachable. Expire it so the 3-second retry loop can try again cleanly.
+  if (dataConnectTimeout) clearTimeout(dataConnectTimeout);
+  dataConnectTimeout = setTimeout(() => {
+    if (dataConn === conn && !conn.open) {
+      console.warn("Data connection attempt timed out; retrying.");
+      try { conn.close(); } catch (_) {}
+      dataConn = null;
+      updateRoleButtons();
+      setRoleStatus("Partner ကို ရှာဖွေနေဆဲပါ။ အလိုအလျောက် ပြန်ချိတ်နေပါတယ်…");
+    }
+    dataConnectTimeout = null;
+  }, 8000);
+
   conn.on("error", error => {
     console.warn("Auto data connection:", error);
+    if (dataConnectTimeout) {
+      clearTimeout(dataConnectTimeout);
+      dataConnectTimeout = null;
+    }
     if (dataConn === conn) dataConn = null;
+    try { conn.close(); } catch (_) {}
     updateRoleButtons();
   });
 }
