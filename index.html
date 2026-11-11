@@ -58,10 +58,10 @@
       </div>
       <div class="role-status" id="roleStatus" role="status">Choose YE or MYAT to connect to your own side.</div>
       <div class="button-row">
-        <button class="btn primary" id="callPartnerBtn" type="button" disabled>♡ Call my partner</button>
+        <button class="btn primary" id="callPartnerBtn" type="button" disabled>▶ Start Movie Share</button>
         <button class="btn secondary" id="changeSideBtn" type="button">Change side</button>
       </div>
-      <p class="hint">Partner online ဖြစ်နေချိန် Call ကိုနှိပ်ပါ။ အဝင် Call ကို Camera/Mic ခွင့်ပြုထားပါက အလိုအလျောက်လက်ခံပေးမယ်။</p>
+      <p class="hint">ကိုယ်နဲ့ Myat နှစ်ယောက်လုံး Website ထဲဝင်ပြီး Side ရွေးထားရင် Start Movie Share ကိုနှိပ်ပါ။ Camera လုံးဝမသုံးဘဲ Screen + Voice ပဲသုံးမယ်။</p>
     </section>
 
     <!-- VIDEO CALL -->
@@ -69,12 +69,12 @@
 
       <div class="section-heading">
         <div>
-          <p class="eyebrow">TOGETHER, EVEN FAR APART</p>
-          <h2>Our little moment</h2>
+          <p class="eyebrow">LIVE SCREEN • VOICE ONLY</p>
+          <h2>Our Movie Theatre</h2>
         </div>
 
         <span class="live-label" id="callState">
-          WAITING TO CONNECT
+          WAITING FOR MOVIE SHARE
         </span>
       </div>
 
@@ -90,11 +90,11 @@
 
           <div class="video-placeholder" id="remotePlaceholder">
             <span>♡</span>
-            <b>Your person will appear here</b>
-            <small>Waiting for them to join...</small>
+            <b>Your shared movie appears here</b>
+            <small>Waiting for screen sharing...</small>
           </div>
 
-          <span class="video-label">YOUR PERSON</span>
+          <span class="video-label">SHARED MOVIE</span>
 
         </div>
 
@@ -109,11 +109,11 @@
 
           <div class="video-placeholder" id="localPlaceholder">
             <span>✧</span>
-            <b>Your camera preview</b>
-            <small>Turn on your camera when ready</small>
+            <b>Your screen preview</b>
+            <small>Your shared screen appears here</small>
           </div>
 
-          <span class="video-label">YOU</span>
+          <span class="video-label">YOUR SCREEN</span>
 
         </div>
 
@@ -123,7 +123,9 @@
         <span>⛶</span><small>Full screen</small>
       </button>
 
-      <!-- CALL CONTROLS -->
+      <audio id="remoteAudio" autoplay hidden></audio>
+
+      <!-- MOVIE CONTROLS -->
 
       <div class="controls">
 
@@ -132,26 +134,20 @@
           <small>Mute</small>
         </button>
 
-        <button class="control" id="cameraBtn" disabled>
-          <span>▣</span>
-          <small>Camera off</small>
-        </button>
-
         <button class="control" id="shareBtn" disabled>
           <span>▱</span>
-          <small>Share screen</small>
+          <small>Stop sharing</small>
         </button>
 
         <button class="control end" id="endBtn" disabled>
           <span>✕</span>
-          <small>Leave</small>
+          <small>End movie</small>
         </button>
 
       </div>
 
       <p class="call-note">
-        Screen sharing switches both sides to Movie Theatre Mode. Tap Full screen on the viewing device.
-        To share movie sound, choose a Chrome tab and enable “Share tab audio”. Your microphone stays available for talking.
+        Camera ကို လုံးဝမဖွင့်ပါ။ Screen ကို Live Video အဖြစ်မျှဝေပြီး Mic အသံနဲ့ပဲ စကားပြောမယ်။ ကြည့်သူက Full screen နှိပ်ပြီး ဖုန်းကို အလျားလိုက်လှည့်ပါ။ Movie အသံအတွက် Chrome Tab ရွေးပြီး Share tab audio ကိုဖွင့်ပါ။
       </p>
 
     </section>
@@ -220,15 +216,6 @@
 
   </main>
 
-
-    <!-- Hidden legacy elements retained for existing app.js handlers -->
-    <div hidden aria-hidden="true">
-      <input id="roomCode"><input id="nickname" value="">
-      <span id="myCodeLabel">Your room code will appear here.</span>
-      <button id="copyBtn" type="button" disabled>Copy code</button>
-      <button id="createBtn" type="button">Create a room</button>
-      <button id="joinBtn" type="button">Join with code</button>
-    </div>
 
   <script src="app.js"></script>
 
