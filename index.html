@@ -1,245 +1,75 @@
-
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#100b1c">
-  <title>TOM & LOVE | LDR Room</title>
-
+  <meta name="description" content="A private little movie and call room for YE and MYAT.">
+  <title>YE ♥ MYAT | LDR Room V2</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
-
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
-
 <body>
-
-  <div class="ambient ambient-one"></div>
-  <div class="ambient ambient-two"></div>
-
-  <main class="app">
-
+  <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+  <main class="app v2-app">
     <header class="topbar">
-      <div class="brand">
-        <span class="brand-icon">♥</span>
-        <span>TOM <i>&</i> LOVE</span>
-      </div>
-
-      <div class="status">
-        <span class="status-dot"></span>
-        <span id="statusText">Ready for love</span>
-      </div>
+      <div class="brand"><span class="brand-icon">♥</span><span>YE <i>&</i> MYAT</span></div>
+      <div class="status"><span class="status-dot" id="statusDot"></span><span id="statusText">A little room for two</span></div>
     </header>
 
     <section class="hero">
-      <p class="eyebrow">A LITTLE PLACE FOR TWO HEARTS</p>
-
-      <h1>
-        Distance means so little<br>
-        when <em>someone means so much.</em>
-      </h1>
-
-      <p class="subtitle">
-        Your own little corner of the internet.
-        Just you, your person, and a little less distance.
-      </p>
+      <p class="eyebrow">YOUR LITTLE CORNER OF THE INTERNET</p>
+      <h1>Two hearts. One room.<br><em>Less distance, more us.</em></h1>
+      <p class="subtitle">Call, watch and spend time together — wherever you are.</p>
     </section>
 
-    <!-- ROOM SECTION -->
     <section class="card room-card">
-
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">YOUR PRIVATE SPACE</p>
-          <h2>Couple Room</h2>
-        </div>
-
-        <span class="private-label">✦ PRIVATE ROOM</span>
+      <div class="section-heading"><div><p class="eyebrow">WELCOME HOME</p><h2>Who’s here today?</h2></div><span class="private-label">♡ OUR ROOM</span></div>
+      <p class="hint">Choose your name on this device. YE should enter first, then MYAT joins.</p>
+      <div class="role-grid">
+        <button class="role-btn" id="yeBtn"><span class="role-heart">♡</span><strong>YE</strong><small>Join as YE</small></button>
+        <button class="role-btn" id="myatBtn"><span class="role-heart">♡</span><strong>MYAT</strong><small>Join as MYAT</small></button>
       </div>
-
-      <div class="input-grid">
-
-        <div class="field">
-          <label>ROOM CODE</label>
-          <input
-            id="roomCode"
-            placeholder="Enter your partner's code"
-            autocomplete="off"
-          >
-        </div>
-
-        <div class="field">
-          <label>YOUR NAME</label>
-          <input
-            id="nickname"
-            maxlength="20"
-            placeholder="Your nickname"
-          >
-        </div>
-
+      <div class="session-row">
+        <span id="myRole">Not connected yet</span>
+        <button class="copy-btn" id="leaveBtn" disabled>Leave room</button>
       </div>
-
-      <div class="button-row">
-        <button class="btn primary" id="createBtn">
-          Create a room
-        </button>
-
-        <button class="btn secondary" id="joinBtn">
-          Join with code
-        </button>
-      </div>
-
-      <div class="share-row">
-        <span id="myCodeLabel">
-          Your room code will appear here.
-        </span>
-
-        <button class="copy-btn" id="copyBtn" disabled>
-          Copy code
-        </button>
-      </div>
-
-      <p class="hint">
-        One person creates a room and shares the code.
-        The other person enters that code to join.
-      </p>
-
+      <p class="call-note">For the best experience, allow camera and microphone access. Use headphones to avoid echo.</p>
     </section>
 
-    <!-- VIDEO CALL -->
     <section class="card call-card">
-
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">TOGETHER, EVEN FAR APART</p>
-          <h2>Our little moment</h2>
-        </div>
-
-        <span class="live-label" id="callState">
-          WAITING TO CONNECT
-        </span>
-      </div>
-
+      <div class="section-heading"><div><p class="eyebrow">TOGETHER, EVEN FAR APART</p><h2>Our little moment</h2></div><span class="live-label" id="callState">WAITING FOR YOU BOTH</span></div>
       <div class="video-grid">
-
-        <div class="video-box">
-
-          <video
-            id="remoteVideo"
-            autoplay
-            playsinline
-          ></video>
-
-          <div class="video-placeholder" id="remotePlaceholder">
-            <span>♡</span>
-            <b>Your person will appear here</b>
-            <small>Waiting for them to join...</small>
-          </div>
-
-          <span class="video-label">YOUR PERSON</span>
-
-        </div>
-
-        <div class="video-box self">
-
-          <video
-            id="localVideo"
-            autoplay
-            muted
-            playsinline
-          ></video>
-
-          <div class="video-placeholder" id="localPlaceholder">
-            <span>✧</span>
-            <b>Your camera preview</b>
-            <small>Turn on your camera when ready</small>
-          </div>
-
-          <span class="video-label">YOU</span>
-
-        </div>
-
+        <div class="video-box"><video id="remoteVideo" autoplay playsinline></video><div class="video-placeholder" id="remotePlaceholder"><span>♡</span><b>Your person will appear here</b><small>Waiting for them to join…</small></div><span class="video-label" id="remoteLabel">YOUR PERSON</span></div>
+        <div class="video-box self"><video id="localVideo" autoplay muted playsinline></video><div class="video-placeholder" id="localPlaceholder"><span>✧</span><b>Your camera preview</b><small>Turn on your camera when ready</small></div><span class="video-label">YOU</span></div>
       </div>
-
-      <!-- CALL CONTROLS -->
-
       <div class="controls">
-
-        <button class="control" id="micBtn" disabled>
-          <span>🎙</span>
-          <small>Mute</small>
-        </button>
-
-        <button class="control" id="cameraBtn" disabled>
-          <span>▣</span>
-          <small>Camera off</small>
-        </button>
-
-        <button class="control" id="shareBtn" disabled>
-          <span>▱</span>
-          <small>Share screen</small>
-        </button>
-
-        <button class="control end" id="endBtn" disabled>
-          <span>✕</span>
-          <small>Leave</small>
-        </button>
-
+        <button class="control" id="micBtn" disabled><span>🎙</span><small>Mute</small></button>
+        <button class="control" id="cameraBtn" disabled><span>▣</span><small>Camera off</small></button>
+        <button class="control" id="shareBtn" disabled><span>▱</span><small>Share screen</small></button>
       </div>
-
-      <p class="call-note">
-        Allow camera and microphone access to start your call.
-        Headphones are recommended.
-      </p>
-
+      <p class="call-note" id="shareNote">Screen sharing with tab audio works best in desktop Chrome. When sharing a Chrome tab, enable “Share tab audio”.</p>
     </section>
 
-    <!-- CHAT -->
+    <section class="card movie-card">
+      <div class="section-heading"><div><p class="eyebrow">MOVIE DATE</p><h2>Watch together</h2></div><span class="chat-heart">♡</span></div>
+      <p class="hint">Paste a YouTube video link. Both people will load the same movie; use the shared play and pause buttons to stay together.</p>
+      <form class="movie-form" id="movieForm"><input id="movieUrl" type="url" placeholder="Paste a YouTube link…" autocomplete="url"><button class="btn primary" type="submit" id="loadMovieBtn" disabled>Load movie</button></form>
+      <div class="movie-frame-wrap"><div class="movie-placeholder" id="moviePlaceholder">Your movie will appear here ♡</div><iframe id="movieFrame" title="Shared movie" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>
+      <div class="movie-controls"><button class="btn secondary" id="playMovieBtn" disabled>▶ Play for both</button><button class="btn secondary" id="pauseMovieBtn" disabled>Ⅱ Pause for both</button></div>
+      <p class="call-note">Some videos may block embedding. If that happens, choose another YouTube video. Each person may need to tap Play once because of browser autoplay rules.</p>
+    </section>
 
     <section class="card chat-card">
-
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">A NOTE FROM YOU</p>
-          <h2>Little messages</h2>
-        </div>
-
-        <span class="chat-heart">♡</span>
-      </div>
-
-      <div class="messages" id="messages">
-
-        <div class="empty-chat">
-          Your little messages will appear here. Say something sweet ♡
-        </div>
-
-      </div>
-
-      <form id="chatForm" class="chat-form">
-
-        <input
-          id="chatInput"
-          maxlength="500"
-          placeholder="Write a little message..."
-          autocomplete="off"
-          disabled
-        >
-
-        <button type="submit" id="sendBtn" disabled>
-          Send ↗
-        </button>
-
-      </form>
-
+      <div class="section-heading"><div><p class="eyebrow">A NOTE FROM YOU</p><h2>Little messages</h2></div><span class="chat-heart">♡</span></div>
+      <div class="messages" id="messages"><div class="empty-chat">Your little messages will appear here. Say something sweet ♡</div></div>
+      <form id="chatForm" class="chat-form"><input id="chatInput" maxlength="500" placeholder="Write a little message…" autocomplete="off" disabled><button type="submit" id="sendBtn" disabled>Send ↗</button></form>
     </section>
-
-    <footer>
-      Made with <span>♥</span> for two people, wherever they are.
-    </footer>
-
+    <footer>Made with <span>♥</span> for YE & MYAT, wherever you are.</footer>
   </main>
-
   <script src="app.js"></script>
-
 </body>
 </html>
