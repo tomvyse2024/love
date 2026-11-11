@@ -481,3 +481,28 @@ footer span {
     padding: 12px 8px;
   }
 }
+
+
+/* V2 movie room */
+.movie-help,.movie-footnote{color:var(--muted);font-size:11px;line-height:1.7}
+.movie-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:15px 0 10px}
+.movie-actions span{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.movie-status{font-size:10px;color:#e8b6cb;min-height:16px}
+.movie-progress{height:6px;background:#170f23;border-radius:20px;overflow:hidden;margin:10px 0}
+.movie-progress div{height:100%;width:0;background:linear-gradient(90deg,#d76e9c,#a85b9b);transition:width .15s}
+#moviePlayer{display:block;width:100%;max-height:520px;aspect-ratio:16/9;background:#08060d;border:1px solid var(--line);border-radius:13px;margin-top:12px}
+.movie-footnote{font-size:9px}
+@media(max-width:620px){.movie-actions .btn{width:100%}#moviePlayer{max-height:300px}}
+
+
+/* YE / MYAT identity chooser */
+.role-help{color:var(--muted);font-size:12px;line-height:1.7}
+.role-buttons{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+.role-btn{min-height:112px;border:1px solid rgba(242,138,181,.28);border-radius:15px;background:#21172d;color:var(--white);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer}
+.role-btn span{font-size:24px;color:var(--pink)}
+.role-btn b{font:600 20px 'Playfair Display',serif;letter-spacing:2px}
+.role-btn small{font-size:9px;color:var(--muted)}
+.role-btn.selected{background:linear-gradient(145deg,#63344f,#3a264c);border-color:var(--pink);box-shadow:0 0 0 2px rgba(242,138,181,.12)}
+.role-status{padding:12px;border:1px solid var(--line);border-radius:10px;background:#170f23;color:#e8b6cb;font-size:11px;line-height:1.6;min-height:42px}
+#callPartnerBtn{flex:1}
+@media(max-width:420px){.role-buttons{gap:8px}.role-btn{min-height:100px}}

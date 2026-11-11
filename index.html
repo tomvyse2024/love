@@ -45,65 +45,23 @@
       </p>
     </section>
 
-    <!-- ROOM SECTION -->
+    <!-- YE & MYAT AUTO ROOM -->
     <section class="card room-card">
-
       <div class="section-heading">
-        <div>
-          <p class="eyebrow">YOUR PRIVATE SPACE</p>
-          <h2>Couple Room</h2>
-        </div>
-
-        <span class="private-label">✦ PRIVATE ROOM</span>
+        <div><p class="eyebrow">JUST THE TWO OF US</p><h2>Choose your side</h2></div>
+        <span class="private-label">♡ OUR ROOM</span>
       </div>
-
-      <div class="input-grid">
-
-        <div class="field">
-          <label>ROOM CODE</label>
-          <input
-            id="roomCode"
-            placeholder="Enter your partner's code"
-            autocomplete="off"
-          >
-        </div>
-
-        <div class="field">
-          <label>YOUR NAME</label>
-          <input
-            id="nickname"
-            maxlength="20"
-            placeholder="Your nickname"
-          >
-        </div>
-
+      <p class="role-help">ကိုယ့်ဘက်က နာမည်ကို တစ်ကြိမ်ရွေးပါ။ Room Code မလိုတော့ပါဘူး။</p>
+      <div class="role-buttons">
+        <button class="role-btn" id="chooseYeBtn" type="button"><span>♡</span><b>YE</b><small>This is my side</small></button>
+        <button class="role-btn" id="chooseMyatBtn" type="button"><span>♡</span><b>MYAT</b><small>This is my side</small></button>
       </div>
-
+      <div class="role-status" id="roleStatus" role="status">Choose YE or MYAT to connect to your own side.</div>
       <div class="button-row">
-        <button class="btn primary" id="createBtn">
-          Create a room
-        </button>
-
-        <button class="btn secondary" id="joinBtn">
-          Join with code
-        </button>
+        <button class="btn primary" id="callPartnerBtn" type="button" disabled>♡ Call my partner</button>
+        <button class="btn secondary" id="changeSideBtn" type="button">Change side</button>
       </div>
-
-      <div class="share-row">
-        <span id="myCodeLabel">
-          Your room code will appear here.
-        </span>
-
-        <button class="copy-btn" id="copyBtn" disabled>
-          Copy code
-        </button>
-      </div>
-
-      <p class="hint">
-        One person creates a room and shares the code.
-        The other person enters that code to join.
-      </p>
-
+      <p class="hint">Partner online ဖြစ်နေချိန် Call ကိုနှိပ်ပါ။ အဝင် Call ကို Camera/Mic ခွင့်ပြုထားပါက အလိုအလျောက်လက်ခံပေးမယ်။</p>
     </section>
 
     <!-- VIDEO CALL -->
@@ -194,6 +152,25 @@
 
     </section>
 
+
+    <!-- MOVIE ROOM V2 -->
+    <section class="card movie-card" id="movieRoom">
+      <div class="section-heading">
+        <div><p class="eyebrow">MOVIE NIGHT, TOGETHER</p><h2>Our little cinema</h2></div>
+        <span class="private-label">♡ WATCH TOGETHER</span>
+      </div>
+      <p class="movie-help">Choose a video from your device. When connected, the file is sent privately to your partner so both of you can watch and hear it in sync.</p>
+      <div class="movie-actions">
+        <input id="movieFile" type="file" accept="video/*,.mp4,.webm,.mov,.m4v" hidden>
+        <button class="btn primary" id="movieChooseBtn" type="button">＋ Upload a movie</button>
+        <span id="movieFileName">No movie selected</span>
+      </div>
+      <div class="movie-progress" id="movieProgress" hidden><div id="movieProgressBar"></div></div>
+      <p class="movie-status" id="movieStatus" role="status">Upload a video to start your movie night.</p>
+      <video id="moviePlayer" controls playsinline preload="metadata"></video>
+      <p class="movie-footnote">Both people receive a temporary copy in their browser. Keep this page open while watching. Large files may take time to transfer.</p>
+    </section>
+
     <!-- CHAT -->
 
     <section class="card chat-card">
@@ -238,6 +215,16 @@
     </footer>
 
   </main>
+
+
+    <!-- Hidden legacy elements retained for existing app.js handlers -->
+    <div hidden aria-hidden="true">
+      <input id="roomCode"><input id="nickname" value="">
+      <span id="myCodeLabel">Your room code will appear here.</span>
+      <button id="copyBtn" type="button" disabled>Copy code</button>
+      <button id="createBtn" type="button">Create a room</button>
+      <button id="joinBtn" type="button">Join with code</button>
+    </div>
 
   <script src="app.js"></script>
 
