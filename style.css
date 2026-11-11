@@ -656,3 +656,30 @@ footer span {
     right:max(8px,env(safe-area-inset-right));
   }
 }
+
+
+/* Separate Movie Share, Video Call and Phone Call actions */
+.call-options{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:9px}
+.call-options .btn{min-width:0;padding:12px 9px}
+.video-call-btn{background:linear-gradient(110deg,#5267a9,#7659a8);color:#fff}
+.phone-call-btn{background:linear-gradient(110deg,#277d78,#3e9a88);color:#fff}
+.side-row{margin-top:8px}
+.side-row .btn{width:100%}
+.call-card.video-call-mode .video-grid{display:grid!important}
+.call-card.video-call-mode .video-box{display:block!important;height:clamp(220px,38vw,420px)}
+.call-card.video-call-mode .video-box.self{display:block!important}
+.call-card.video-call-mode .video-placeholder{display:none!important}
+.call-card.video-call-mode .video-label{display:block}
+.call-card.video-call-mode .controls{display:flex!important}
+.call-card.video-call-mode .theatre-fullscreen-btn{display:none!important}
+.call-card.phone-call-mode .video-grid{display:none!important}
+.call-card.phone-call-mode .controls{display:flex!important}
+.call-card.phone-call-mode .call-note{display:block}
+@media(max-width:620px){
+  .call-options{grid-template-columns:1fr 1fr}
+  .call-options #callPartnerBtn{grid-column:1/-1}
+  .call-options .btn{padding:12px 7px;font-size:10px}
+  .call-card.video-call-mode .video-grid{grid-template-columns:1fr}
+  .call-card.video-call-mode .video-box{height:260px}
+  .call-card.video-call-mode .video-box.self{height:210px}
+}
