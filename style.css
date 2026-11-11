@@ -481,3 +481,32 @@ footer span {
     padding: 12px 8px;
   }
 }
+
+
+/* V2 layout and controls */
+.video-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px; }
+.role-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:20px; }
+.role-btn { min-height:116px; border:1px solid rgba(242,138,181,.25); border-radius:15px; background:linear-gradient(145deg,#30203e,#1b1228); color:#fff8fc; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; cursor:pointer; transition:transform .18s,border-color .18s; }
+.role-btn:hover { transform:translateY(-2px); border-color:#f28ab5; }
+.role-btn:disabled { opacity:.45; cursor:not-allowed; }
+.role-heart { font:28px 'Playfair Display'; color:#ffb2cb; }
+.role-btn strong { font:600 17px 'DM Sans'; letter-spacing:2px; }
+.role-btn small { font-size:10px; color:#b9a8c3; }
+.session-row { display:flex; align-items:center; justify-content:space-between; gap:10px; border-top:1px solid var(--line); margin-top:18px; padding-top:14px; color:var(--muted); font-size:11px; }
+.movie-form { display:flex; gap:9px; margin:18px 0 12px; }
+.movie-form input { flex:1; min-width:0; background:#170f23; border:1px solid var(--line); border-radius:10px; color:white; padding:13px 14px; outline:none; font:12px 'DM Sans'; }
+.movie-form input:focus { border-color:#b66a91; }
+.movie-frame-wrap { position:relative; width:100%; aspect-ratio:16/9; overflow:hidden; border-radius:13px; background:#08060d; border:1px solid var(--line); }
+.movie-frame-wrap iframe { display:block; width:100%; height:100%; border:0; }
+.movie-placeholder { position:absolute; inset:0; display:grid; place-items:center; color:#b9a8c3; font-size:12px; pointer-events:none; }
+.movie-controls { display:flex; justify-content:center; gap:10px; margin-top:13px; }
+.movie-controls .btn { cursor:pointer; }
+.movie-controls .btn:disabled { cursor:not-allowed; }
+@media(max-width:620px) {
+  .video-grid { grid-template-columns:1fr; }
+  .role-grid { gap:9px; }
+  .movie-form { flex-direction:column; }
+  .movie-form .btn { width:100%; }
+  .movie-controls { flex-wrap:wrap; }
+  .movie-controls .btn { flex:1; }
+}
