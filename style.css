@@ -628,3 +628,31 @@ footer span {
   .call-card.theatre-mode .control{width:56px;height:54px}
   .theatre-fullscreen-btn{padding:9px 12px}
 }
+
+
+/* Camera-free Movie Share mode */
+#remoteAudio{display:none!important}
+.call-card:not(.session-active) .controls{display:none!important}
+.call-card:not(.session-active) .video-box.self{display:none}
+.call-card.theatre-mode:not(.local-sharing) #shareBtn{display:none!important}
+.call-card.theatre-mode.local-sharing #shareBtn{display:flex!important}
+.call-card.theatre-mode .video-box video{object-fit:contain}
+.call-card.theatre-mode .controls #micBtn,
+.call-card.theatre-mode .controls #endBtn{display:flex}
+.call-card.session-active:not(.theatre-mode) .controls{
+  display:flex;
+  justify-content:center;
+}
+.call-card.session-active:not(.theatre-mode) .video-box.self{display:none}
+.call-card.theatre-mode .theatre-fullscreen-btn{display:flex}
+@media(max-height:500px) and (orientation:landscape){
+  .call-card.theatre-mode .controls{
+    bottom:max(8px,env(safe-area-inset-bottom));
+    padding:6px 8px;
+  }
+  .call-card.theatre-mode .control{height:46px;width:54px}
+  .call-card.theatre-mode .theatre-fullscreen-btn{
+    top:max(8px,env(safe-area-inset-top));
+    right:max(8px,env(safe-area-inset-right));
+  }
+}
