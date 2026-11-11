@@ -655,13 +655,27 @@ async function selectSide(side) {
     setRoleStatus(side + " side is ready. Waiting for your partner…");
     return;
   }
+  if (currentCall) {
+    try { currentCall.close(); } catch (_) {}
+    currentCall = null;
+  }
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+  if (screenStream) {
+    screenStream.getTracks().forEach(track => track.stop());
+    screenStream = null;
+  }
+  if (dataConn) {
+    try { dataConn.close(); } catch (_) {}
+    dataConn = null;
+  }
   if (peer) {
     try { peer.destroy(); } catch (_) {}
     peer = null;
   }
   if (dataRetryTimer) clearInterval(dataRetryTimer);
-  dataConn = null;
-  currentCall = null;
   mySide = side;
   partnerPeerId = side === "YE" ? MYAT_PEER_ID : YE_PEER_ID;
   localStorage.setItem("ldr-side", side);
