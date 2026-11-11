@@ -15,6 +15,10 @@ let localStream = null;       // Microphone only — never requests a camera.
 let screenStream = null;      // Shared display video and optional tab audio.
 let screenAudioContext = null;
 let mixedAudioTrack = null;
+let audioDestination = null;
+let micSourceNode = null;
+let movieSourceNode = null;
+let audioSender = null;
 
 let micOn = true;
 let busy = false;
@@ -180,6 +184,114 @@ async function getMicStream() {
   return localStream;
 }
 
+async function findAudioSender(call = currentCall) {
+  if (call && call === currentCall && audioSender) return audioSender;
+
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const pc = call && call.peerConnection;
+    if (pc) {
+      const senders = pc.getSenders ? pc.getSenders() : [];
+      let sender = senders.find(item => item.track && item.track.kind === "audio");
+
+      // After replaceTrack(null), use the audio transceiver's receiver track
+      // to find the same sender again when the user unmutes.
+      if (!sender && pc.getTransceivers) {
+        const transceiver = pc.getTransceivers().find(item =>
+          item.receiver && item.receiver.track &&
+          item.receiver.track.kind === "audio"
+        );
+        if (transceiver) sender = transceiver.sender;
+      }
+
+      if (sender) {
+        if (call === currentCall) audioSender = sender;
+        return sender;
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return null;
+}
+
+function updateMicButton() {
+  $("micBtn").classList.toggle("active", !micOn);
+  $("micBtn").querySelector("small").textContent = micOn ? "Mute" : "Unmute";
+  $("micBtn").title = micOn
+    ? "Mute and release microphone"
+    : "Turn microphone on again";
+}
+
+async function toggleMicrophone() {
+  if (!currentCall) return;
+
+  const button = $("micBtn");
+  button.disabled = true;
+
+  try {
+    if (micOn) {
+      // Disconnect the microphone from the movie mix first, if tab audio is
+      // being mixed. This keeps movie sound playing while releasing the mic.
+      if (micSourceNode) {
+        try { micSourceNode.disconnect(); } catch (_) {}
+        micSourceNode = null;
+      } else {
+        const sender = await findAudioSender(currentCall);
+        if (sender && sender.replaceTrack) {
+          await sender.replaceTrack(null);
+        }
+      }
+
+      const microphone = localStream;
+      localStream = null;
+      if (microphone) {
+        microphone.getTracks().forEach(track => {
+          try { track.stop(); } catch (_) {}
+        });
+      }
+
+      micOn = false;
+      updateMicButton();
+      setRoleStatus("Microphone ကို လုံးဝပိတ်ပြီး စက်ထဲကလည်း ဖြုတ်ထားပါပြီ။ Movie အသံတော့ ဆက်ကြားရပါမယ်။");
+    } else {
+      // Ask for the microphone again only after the user explicitly unmutes.
+      const microphone = await getMicStream();
+      const track = microphone.getAudioTracks()[0];
+      if (!track) throw new Error("No microphone track was created.");
+
+      if (audioDestination && screenAudioContext) {
+        await screenAudioContext.resume();
+        micSourceNode = screenAudioContext.createMediaStreamSource(microphone);
+        micSourceNode.connect(audioDestination);
+      } else {
+        const sender = await findAudioSender(currentCall);
+        if (!sender || !sender.replaceTrack) {
+          throw new Error("The voice connection is not ready yet.");
+        }
+        await sender.replaceTrack(track);
+      }
+
+      micOn = true;
+      updateMicButton();
+      setRoleStatus("Microphone ပြန်ဖွင့်ပြီးပါပြီ။ စကားပြောနိုင်ပါပြီ ♡");
+    }
+  } catch (error) {
+    console.warn("Microphone toggle:", error);
+
+    // If unmuting failed after permission was granted, release the new track.
+    if (!micOn && localStream) {
+      localStream.getTracks().forEach(track => {
+        try { track.stop(); } catch (_) {}
+      });
+      localStream = null;
+    }
+    setRoleStatus(micOn
+      ? "Microphone ကို ပိတ်ရာမှာ အခက်အခဲရှိပါတယ်။ ထပ်နှိပ်ကြည့်ပါ။"
+      : "Microphone ပြန်ဖွင့်မရသေးပါ။ Permission ကို စစ်ပြီး Unmute ထပ်နှိပ်ပါ။");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function addMessage(message, mine, name = "Partner") {
   const box = $("messages");
   const empty = box.querySelector(".empty-chat");
@@ -303,7 +415,9 @@ function setupPeer(peerId) {
         setRoleStatus("Partner က Movie Share လုပ်နေပါတယ်။ Camera မဟုတ်ဘဲ Microphone permission ကို Allow လုပ်ပါ။");
         const microphone = await getMicStream();
         currentCall = call;
+        audioSender = null;
         call.answer(microphone);
+        findAudioSender(call).catch(error => console.warn("Audio sender:", error));
         setSessionControls(true, false);
         setCallState("CONNECTING TO MOVIE…");
         bindCallEvents(call, "incoming");
@@ -364,18 +478,22 @@ async function startMovieShare() {
     const tabAudioTrack = screenStream.getAudioTracks()[0];
     let outgoingAudioTrack = micTrack;
 
-    // Mix movie/tab sound and microphone into one outgoing audio track when available.
+    // Mix movie/tab sound and microphone when tab audio is available.
+    // Muting later disconnects and stops only the microphone source.
+    audioDestination = null;
+    micSourceNode = null;
+    movieSourceNode = null;
     if (tabAudioTrack && micTrack) {
       screenAudioContext = new (window.AudioContext || window.webkitAudioContext)();
       await screenAudioContext.resume();
-      const destination = screenAudioContext.createMediaStreamDestination();
+      audioDestination = screenAudioContext.createMediaStreamDestination();
 
-      const micSource = screenAudioContext.createMediaStreamSource(new MediaStream([micTrack]));
-      const movieSource = screenAudioContext.createMediaStreamSource(new MediaStream([tabAudioTrack]));
-      micSource.connect(destination);
-      movieSource.connect(destination);
+      micSourceNode = screenAudioContext.createMediaStreamSource(microphone);
+      movieSourceNode = screenAudioContext.createMediaStreamSource(new MediaStream([tabAudioTrack]));
+      micSourceNode.connect(audioDestination);
+      movieSourceNode.connect(audioDestination);
 
-      mixedAudioTrack = destination.stream.getAudioTracks()[0];
+      mixedAudioTrack = audioDestination.stream.getAudioTracks()[0];
       outgoingAudioTrack = mixedAudioTrack;
     }
 
@@ -387,6 +505,8 @@ async function startMovieShare() {
       metadata: {type:"movie-screen-share"}
     });
     if (!currentCall) throw new Error("Could not start the screen stream.");
+    audioSender = null;
+    findAudioSender(currentCall).catch(error => console.warn("Audio sender:", error));
 
     $("localVideo").srcObject = screenStream;
     $("localPlaceholder").style.display = "none";
@@ -428,6 +548,16 @@ async function endSession(closeCall = true) {
     try { track.stop(); } catch (_) {}
   });
 
+  if (micSourceNode) {
+    try { micSourceNode.disconnect(); } catch (_) {}
+    micSourceNode = null;
+  }
+  if (movieSourceNode) {
+    try { movieSourceNode.disconnect(); } catch (_) {}
+    movieSourceNode = null;
+  }
+  audioDestination = null;
+
   if (screenAudioContext) {
     await screenAudioContext.close().catch(() => {});
     screenAudioContext = null;
@@ -436,6 +566,7 @@ async function endSession(closeCall = true) {
     try { mixedAudioTrack.stop(); } catch (_) {}
     mixedAudioTrack = null;
   }
+  audioSender = null;
 
   $("remoteAudio").srcObject = null;
   $("remoteVideo").srcObject = null;
@@ -446,8 +577,7 @@ async function endSession(closeCall = true) {
   setTheatreMode(false);
   setSessionControls(false, false);
   micOn = true;
-  $("micBtn").classList.remove("active");
-  $("micBtn").querySelector("small").textContent = "Mute";
+  updateMicButton();
   $("shareBtn").querySelector("small").textContent = "Stop sharing";
   setStatus("Movie session ended", !!(peer && peer.open));
   setCallState("WAITING FOR MOVIE SHARE");
@@ -458,13 +588,7 @@ $("callPartnerBtn").addEventListener("click", startMovieShare);
 $("shareBtn").addEventListener("click", () => endSession());
 $("endBtn").addEventListener("click", () => endSession());
 
-$("micBtn").addEventListener("click", () => {
-  if (!localStream) return;
-  micOn = !micOn;
-  localStream.getAudioTracks().forEach(track => { track.enabled = micOn; });
-  $("micBtn").classList.toggle("active", !micOn);
-  $("micBtn").querySelector("small").textContent = micOn ? "Mute" : "Unmute";
-});
+$("micBtn").addEventListener("click", toggleMicrophone);
 
 $("chatForm").addEventListener("submit", event => {
   event.preventDefault();
