@@ -57,11 +57,15 @@
         <button class="role-btn" id="chooseMyatBtn" type="button"><span>♡</span><b>MYAT</b><small>This is my side</small></button>
       </div>
       <div class="role-status" id="roleStatus" role="status">Choose YE or MYAT to connect to your own side.</div>
-      <div class="button-row">
-        <button class="btn primary" id="callPartnerBtn" type="button" disabled>▶ Start Movie Share</button>
+      <div class="button-row call-options">
+        <button class="btn primary" id="callPartnerBtn" type="button" disabled>▶ Movie Share</button>
+        <button class="btn video-call-btn" id="videoCallBtn" type="button" disabled>▣ Video Call</button>
+        <button class="btn phone-call-btn" id="phoneCallBtn" type="button" disabled>☎ Phone Call</button>
+      </div>
+      <div class="button-row side-row">
         <button class="btn secondary" id="changeSideBtn" type="button">Change side</button>
       </div>
-      <p class="hint">ကိုယ်နဲ့ Myat နှစ်ယောက်လုံး Website ထဲဝင်ပြီး Side ရွေးထားရင် Start Movie Share ကိုနှိပ်ပါ။ Camera လုံးဝမသုံးဘဲ Screen + Voice ပဲသုံးမယ်။</p>
+      <p class="hint">Movie Share = Screen + Voice သီးသန့်။ Video Call = Camera + Mic။ Phone Call = Mic only။ နှစ်ယောက်လုံး Side ရွေးပြီး ချိတ်ဆက်ထားမှ ခေါ်ဆိုနိုင်ပါတယ်။</p>
     </section>
 
     <!-- VIDEO CALL -->
@@ -69,8 +73,8 @@
 
       <div class="section-heading">
         <div>
-          <p class="eyebrow">LIVE SCREEN • VOICE ONLY</p>
-          <h2>Our Movie Theatre</h2>
+          <p class="eyebrow" id="mediaEyebrow">LIVE SCREEN • VOICE ONLY</p>
+          <h2 id="mediaTitle">Our Movie Theatre</h2>
         </div>
 
         <span class="live-label" id="callState">
