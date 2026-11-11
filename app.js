@@ -142,7 +142,9 @@ function setupPeer(peerId) {
 
     peer.on("call", async call => {
       try {
+        setRoleStatus("Incoming call… turning on camera and microphone to answer.");
         await getMedia();
+        enableControls();
 
         currentCall = call;
         call.answer(localStream);
