@@ -7,6 +7,11 @@ let currentCall = null;
 let dataConn = null;
 let screenStream = null;
 let originalVideoTrack = null;
+let originalAudioTrack = null;
+let screenAudioContext = null;
+let mixedAudioTrack = null;
+let isScreenSharing = false;
+let theatreCameraState = null;
 
 let micOn = true;
 let cameraOn = true;
@@ -26,6 +31,84 @@ function showLocalVideo() {
   $("localVideo").srcObject = localStream;
   $("localPlaceholder").style.display = "none";
 }
+
+function setTheatreMode(active, source = "remote") {
+  const card = $("callCard");
+  if (!card) return;
+
+  if (active) {
+    if (!card.classList.contains("theatre-mode")) {
+      const videoTracks = localStream?.getVideoTracks() || [];
+      theatreCameraState = videoTracks.length
+        ? videoTracks.some(track => track.enabled)
+        : cameraOn;
+    }
+
+    card.classList.add("theatre-mode");
+    card.classList.toggle("local-sharing", source === "local");
+
+    // Movie night is voice-only: stop the local camera track on both sides.
+    if (localStream) {
+      localStream.getVideoTracks().forEach(track => { track.enabled = false; });
+    }
+    cameraOn = false;
+    $("cameraBtn").classList.add("active");
+    $("cameraBtn").querySelector("small").textContent = "Camera on";
+
+    const viewingVideo = source === "local" ? $("localVideo") : $("remoteVideo");
+    if (viewingVideo?.srcObject) viewingVideo.play().catch(() => {});
+    setCallState("MOVIE NIGHT • VOICE ON");
+    $("statusText").textContent = "Movie night — voice chat is on";
+  } else {
+    card.classList.remove("theatre-mode", "local-sharing");
+
+    if (localStream && theatreCameraState !== null) {
+      localStream.getVideoTracks().forEach(track => {
+        track.enabled = theatreCameraState;
+      });
+      cameraOn = theatreCameraState;
+    }
+    theatreCameraState = null;
+    $("cameraBtn").classList.toggle("active", !cameraOn);
+    $("cameraBtn").querySelector("small").textContent =
+      cameraOn ? "Camera off" : "Camera on";
+
+    if (document.fullscreenElement === card) {
+      document.exitFullscreen?.().catch(() => {});
+    }
+    setCallState(currentCall ? "YOU ARE TOGETHER ♡" : "WAITING TO CONNECT");
+  }
+}
+
+async function toggleTheatreFullscreen() {
+  const card = $("callCard");
+  const activeVideo = card.classList.contains("local-sharing")
+    ? $("localVideo")
+    : $("remoteVideo");
+
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else if (card.requestFullscreen) {
+      await card.requestFullscreen({ navigationUI: "hide" });
+    } else if (activeVideo.webkitEnterFullscreen) {
+      // iOS Safari fallback: enter native video fullscreen.
+      activeVideo.webkitEnterFullscreen();
+    } else {
+      throw new Error("Fullscreen is not supported by this browser.");
+    }
+  } catch (error) {
+    console.warn("Fullscreen:", error);
+    setRoleStatus("Full screen မရသေးပါ။ Browser ကို update လုပ်ပြီး ထပ်စမ်းပါ။");
+  }
+}
+
+$("theatreFullscreenBtn").addEventListener("click", toggleTheatreFullscreen);
+document.addEventListener("fullscreenchange", () => {
+  const isFullscreen = document.fullscreenElement === $("callCard");
+  $("theatreFullscreenBtn").querySelector("small").textContent =
+    isFullscreen ? "Exit full screen" : "Full screen";
+});
 
 function addMessage(text, mine, name = "Partner") {
   const box = $("messages");
@@ -93,6 +176,7 @@ function attachConnection(conn) {
   conn.on("open", () => {
     setStatus("Connected with your person", true);
     enableChatControls();
+    if (isScreenSharing) sendScreenShareState(true);
   });
 
   conn.on("data", data => {
@@ -343,7 +427,50 @@ $("cameraBtn").addEventListener("click", () => {
     cameraOn ? "Camera off" : "Camera on";
 });
 
-// SCREEN SHARE
+// SCREEN SHARE + MOVIE THEATRE MODE
+function sendScreenShareState(active) {
+  if (dataConn && dataConn.open) {
+    dataConn.send({ type: "screen-share-state", active: !!active });
+  }
+}
+
+async function stopScreenShare() {
+  if (!screenStream) return;
+
+  const videoSender = currentCall?.peerConnection
+    .getSenders()
+    .find(item => item.track?.kind === "video");
+  const audioSender = currentCall?.peerConnection
+    .getSenders()
+    .find(item => item.track?.kind === "audio");
+
+  if (videoSender && originalVideoTrack) {
+    await videoSender.replaceTrack(originalVideoTrack);
+  }
+  if (audioSender && originalAudioTrack) {
+    await audioSender.replaceTrack(originalAudioTrack);
+  }
+
+  sendScreenShareState(false);
+  isScreenSharing = false;
+
+  screenStream.getTracks().forEach(track => track.stop());
+  screenStream = null;
+
+  if (screenAudioContext) {
+    await screenAudioContext.close().catch(() => {});
+    screenAudioContext = null;
+  }
+  if (mixedAudioTrack) {
+    mixedAudioTrack.stop();
+    mixedAudioTrack = null;
+  }
+  originalAudioTrack = null;
+
+  $("localVideo").srcObject = localStream;
+  $("shareBtn").querySelector("small").textContent = "Share screen";
+  setTheatreMode(false);
+}
 
 $("shareBtn").addEventListener("click", async () => {
   if (!currentCall) {
@@ -352,63 +479,86 @@ $("shareBtn").addEventListener("click", async () => {
   }
 
   try {
-    const sender = currentCall.peerConnection
-      .getSenders()
-      .find(item => item.track?.kind === "video");
-
     if (screenStream) {
-      if (sender && originalVideoTrack) {
-        await sender.replaceTrack(originalVideoTrack);
-      }
-
-      screenStream.getTracks().forEach(track => track.stop());
-      screenStream = null;
-
-      $("localVideo").srcObject = localStream;
-      $("shareBtn").querySelector("small").textContent = "Share screen";
-
+      await stopScreenShare();
       return;
     }
 
+    // Request tab/system audio too, so the movie and microphone can be heard together.
     screenStream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
-      audio: false
+      audio: true
     });
 
     const screenTrack = screenStream.getVideoTracks()[0];
+    const videoSender = currentCall.peerConnection
+      .getSenders()
+      .find(item => item.track?.kind === "video");
 
-    if (sender) {
-      await sender.replaceTrack(screenTrack);
+    if (!screenTrack || !videoSender) {
+      throw new Error("Could not find the screen video track.");
+    }
+
+    await videoSender.replaceTrack(screenTrack);
+
+    // Mix captured movie/tab audio with the microphone into the existing call audio track.
+    const capturedAudioTrack = screenStream.getAudioTracks()[0];
+    const microphoneTrack = localStream?.getAudioTracks()[0];
+    const audioSender = currentCall.peerConnection
+      .getSenders()
+      .find(item => item.track?.kind === "audio");
+
+    if (capturedAudioTrack && microphoneTrack && audioSender) {
+      screenAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      await screenAudioContext.resume();
+
+      const destination = screenAudioContext.createMediaStreamDestination();
+      const micSource = screenAudioContext.createMediaStreamSource(
+        new MediaStream([microphoneTrack])
+      );
+      const movieSource = screenAudioContext.createMediaStreamSource(
+        new MediaStream([capturedAudioTrack])
+      );
+
+      micSource.connect(destination);
+      movieSource.connect(destination);
+
+      originalAudioTrack = microphoneTrack;
+      mixedAudioTrack = destination.stream.getAudioTracks()[0];
+      await audioSender.replaceTrack(mixedAudioTrack);
     }
 
     $("localVideo").srcObject = screenStream;
+    $("shareBtn").querySelector("small").textContent = "Stop sharing";
+    isScreenSharing = true;
+    setTheatreMode(true, "local");
+    sendScreenShareState(true);
 
-    $("shareBtn").querySelector("small").textContent =
-      "Stop sharing";
-
-    screenTrack.onended = async () => {
-      if (!screenStream) return;
-
-      const videoSender = currentCall?.peerConnection
-        .getSenders()
-        .find(item => item.track?.kind === "video");
-
-      if (videoSender && originalVideoTrack) {
-        await videoSender.replaceTrack(originalVideoTrack);
-      }
-
-      screenStream.getTracks().forEach(track => track.stop());
-
-      screenStream = null;
-
-      $("localVideo").srcObject = localStream;
-
-      $("shareBtn").querySelector("small").textContent =
-        "Share screen";
+    screenTrack.onended = () => {
+      stopScreenShare().catch(error => console.warn("Stop screen share:", error));
     };
 
+    if (!capturedAudioTrack) {
+      movieSay("Screen is shared. If you want your partner to hear the movie, share a Chrome tab and enable Share tab audio.");
+    }
   } catch (error) {
     console.warn("Screen sharing:", error);
+    if (screenStream) {
+      screenStream.getTracks().forEach(track => track.stop());
+      screenStream = null;
+    }
+    if (screenAudioContext) {
+      await screenAudioContext.close().catch(() => {});
+      screenAudioContext = null;
+    }
+    if (mixedAudioTrack) {
+      mixedAudioTrack.stop();
+      mixedAudioTrack = null;
+    }
+    originalAudioTrack = null;
+    isScreenSharing = false;
+    setTheatreMode(false);
+    setRoleStatus("Screen share မအောင်မြင်ပါ။ Browser permission ကို Allow လုပ်ပြီး ထပ်စမ်းပါ။");
   }
 });
 
@@ -443,6 +593,7 @@ $("chatForm").addEventListener("submit", event => {
 // RESET REMOTE VIDEO
 
 function resetRemote() {
+  setTheatreMode(false);
   $("remoteVideo").srcObject = null;
 
   $("remotePlaceholder").style.display = "flex";
@@ -565,6 +716,10 @@ movieInput.addEventListener("change", async () => {
 });
 
 function handleMovieData(data) {
+  if (data && typeof data === "object" && data.type === "screen-share-state") {
+    setTheatreMode(!!data.active, "remote");
+    return;
+  }
   if (data && typeof data === "object" && data.type === "movie-start") {
     incomingMovie = {name:data.name || "Shared movie", mime:data.mime || "video/mp4", size:data.size, total:data.total, chunks:[], received:0};
     movieProgress.hidden = false;
