@@ -543,6 +543,19 @@ $("shareBtn").addEventListener("click", async () => {
     }
   } catch (error) {
     console.warn("Screen sharing:", error);
+    const videoSender = currentCall?.peerConnection
+      .getSenders()
+      .find(item => item.track?.kind === "video");
+    const audioSender = currentCall?.peerConnection
+      .getSenders()
+      .find(item => item.track?.kind === "audio");
+
+    if (videoSender && originalVideoTrack) {
+      await videoSender.replaceTrack(originalVideoTrack).catch(() => {});
+    }
+    if (audioSender && originalAudioTrack) {
+      await audioSender.replaceTrack(originalAudioTrack).catch(() => {});
+    }
     if (screenStream) {
       screenStream.getTracks().forEach(track => track.stop());
       screenStream = null;
@@ -557,6 +570,8 @@ $("shareBtn").addEventListener("click", async () => {
     }
     originalAudioTrack = null;
     isScreenSharing = false;
+    $("localVideo").srcObject = localStream;
+    $("shareBtn").querySelector("small").textContent = "Share screen";
     setTheatreMode(false);
     setRoleStatus("Screen share မအောင်မြင်ပါ။ Browser permission ကို Allow လုပ်ပြီး ထပ်စမ်းပါ။");
   }
@@ -602,7 +617,10 @@ function resetRemote() {
 }
 
 // END CALL — keep the YE/MYAT identity and PeerJS registration alive.
-$("endBtn").addEventListener("click", () => {
+$("endBtn").addEventListener("click", async () => {
+  if (screenStream) {
+    try { await stopScreenShare(); } catch (error) { console.warn(error); }
+  }
   if (currentCall) {
     currentCall.close();
     currentCall = null;
@@ -866,6 +884,17 @@ $("changeSideBtn").addEventListener("click", () => {
   localStream = null;
   if (screenStream) screenStream.getTracks().forEach(track => track.stop());
   screenStream = null;
+  if (screenAudioContext) {
+    screenAudioContext.close().catch(() => {});
+    screenAudioContext = null;
+  }
+  if (mixedAudioTrack) {
+    mixedAudioTrack.stop();
+    mixedAudioTrack = null;
+  }
+  originalAudioTrack = null;
+  isScreenSharing = false;
+  setTheatreMode(false);
   if (dataConn) dataConn.close();
   if (peer) peer.destroy();
   if (dataRetryTimer) clearInterval(dataRetryTimer);
