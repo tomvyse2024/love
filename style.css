@@ -481,3 +481,15 @@ footer span {
     padding: 12px 8px;
   }
 }
+
+
+/* V2 movie room */
+.movie-help,.movie-footnote{color:var(--muted);font-size:11px;line-height:1.7}
+.movie-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:15px 0 10px}
+.movie-actions span{font-size:10px;color:var(--muted);overflow-wrap:anywhere}
+.movie-status{font-size:10px;color:#e8b6cb;min-height:16px}
+.movie-progress{height:6px;background:#170f23;border-radius:20px;overflow:hidden;margin:10px 0}
+.movie-progress div{height:100%;width:0;background:linear-gradient(90deg,#d76e9c,#a85b9b);transition:width .15s}
+#moviePlayer{display:block;width:100%;max-height:520px;aspect-ratio:16/9;background:#08060d;border:1px solid var(--line);border-radius:13px;margin-top:12px}
+.movie-footnote{font-size:9px}
+@media(max-width:620px){.movie-actions .btn{width:100%}#moviePlayer{max-height:300px}}
