@@ -545,6 +545,7 @@ async function startMovieShare() {
     if (outgoingAudioTrack) outgoingTracks.push(outgoingAudioTrack);
     const outgoingStream = new MediaStream(outgoingTracks);
 
+    notifyPartnerCall("movie");
     currentCall = peer.call(partnerPeerId, outgoingStream, {
       metadata: {type:"movie-screen-share"}
     });
@@ -1037,7 +1038,8 @@ async function notifyPartnerCall(callType) {
 if ($("enableNotificationsBtn")) {
   $("enableNotificationsBtn").addEventListener("click", enableCallNotifications);
 }
-\n// Restore the saved identity without requesting camera or microphone access.
+
+// Restore the saved identity without requesting camera or microphone access.
 const savedSide = localStorage.getItem("ldr-side");
 if (savedSide === "YE" || savedSide === "MYAT") {
   mySide = savedSide;
