@@ -324,9 +324,14 @@ function enableChatControls() {
 }
 
 function attachConnection(conn) {
+  // Keep only the newest live data channel; stale channels must not block retry.
+  if (dataConn && dataConn !== conn) {
+    try { dataConn.close(); } catch (_) {}
+  }
   dataConn = conn;
 
   conn.on("open", () => {
+    if (dataConn !== conn) return;
     setStatus("Connected with your person", true);
     enableChatControls();
     updateRoleButtons();
@@ -334,6 +339,7 @@ function attachConnection(conn) {
   });
 
   conn.on("data", data => {
+    if (dataConn !== conn) return;
     if (data && data.type === "chat") {
       addMessage(String(data.text || ""), false, String(data.name || "Partner"));
       return;
@@ -342,15 +348,20 @@ function attachConnection(conn) {
   });
 
   conn.on("close", () => {
-    if (dataConn === conn) dataConn = null;
-    $("chatInput").disabled = true;
-    $("sendBtn").disabled = true;
-    updateRoleButtons();
-    setStatus("Partner connection closed");
+    if (dataConn === conn) {
+      dataConn = null;
+      $("chatInput").disabled = true;
+      $("sendBtn").disabled = true;
+      updateRoleButtons();
+      setStatus("Partner disconnected — reconnecting…");
+      setRoleStatus("ချိတ်ဆက်မှု ပြတ်သွားပါတယ်။ အလိုအလျောက် ပြန်ချိတ်နေပါတယ်…");
+    }
   });
 
   conn.on("error", error => {
     console.warn("Data connection:", error);
+    if (dataConn === conn && !conn.open) dataConn = null;
+    updateRoleButtons();
   });
 }
 
@@ -473,14 +484,53 @@ function setupPeer(peerId) {
       }
     });
 
-    peer.on("disconnected", () => setStatus("Reconnecting…"));
+    peer.on("disconnected", () => {
+      setStatus("Peer server disconnected — reconnecting…");
+      setRoleStatus("Room server နဲ့ ပြန်ချိတ်ဆက်နေပါတယ်။ ခဏစောင့်ပေးပါ…");
+      updateRoleButtons();
+      // PeerJS does not always restore its signaling socket by itself.
+      setTimeout(() => {
+        if (peer && peer.disconnected && !peer.destroyed) {
+          try { peer.reconnect(); } catch (error) {
+            console.warn("Peer reconnect:", error);
+          }
+        }
+      }, 1200);
+    });
+
+    peer.on("open", () => {
+      if (mySide) {
+        setStatus("Your side is online", true);
+        // Re-open the YE-initiated data channel after signaling recovers.
+        setTimeout(tryDataConnection, 300);
+      }
+    });
   });
 }
 
 function tryDataConnection() {
-  // YE alone starts the data channel. MYAT waits for the incoming connection.
-  if (mySide !== "YE" || !peer || !peer.open || !partnerPeerId) return;
-  if (dataConn) return;
+  // YE is the single initiator. MYAT accepts the incoming channel.
+  if (mySide !== "YE" || !peer || peer.destroyed || !partnerPeerId) return;
+
+  if (peer.disconnected) {
+    try { peer.reconnect(); } catch (error) {
+      console.warn("Peer signaling reconnect:", error);
+    }
+    return;
+  }
+  if (!peer.open) return;
+
+  if (dataConn) {
+    if (dataConn.open) return;
+    // A pending/closed channel must not block future connection attempts.
+    if (dataConn.open === false && dataConn.peerConnection &&
+        dataConn.peerConnection.connectionState === "closed") {
+      try { dataConn.close(); } catch (_) {}
+      dataConn = null;
+    } else if (dataConn.open === false) {
+      return;
+    }
+  }
 
   const conn = peer.connect(partnerPeerId, {reliable:true});
   attachConnection(conn);
@@ -745,7 +795,7 @@ async function selectSide(side) {
     setStatus("Your side is online", true);
     updateRoleButtons();
 
-    dataRetryTimer = setInterval(tryDataConnection, 5000);
+    dataRetryTimer = setInterval(tryDataConnection, 3000);
     tryDataConnection();
   } catch (error) {
     console.error(error);
@@ -1027,7 +1077,7 @@ async function enableCallNotifications() {
 async function notifyPartnerCall(callType) {
   try {
     if (!firebase.apps.length || !firebase.auth().currentUser) return;
-    const pairingCode = sessionStorage.getItem("tom-love-pairing-code");
+    const pairingCode = localStorage.getItem("tom-love-pairing-code");
     if (!pairingCode) {
       setNotificationStatus("Enable Call Notifications first to alert your partner.");
       return;
@@ -1055,7 +1105,7 @@ if (savedSide === "YE" || savedSide === "MYAT") {
     setRoleStatus(savedSide + " side is online ♡ Partner ကို စောင့်နေပါတယ်။");
     setStatus("Your side is online", true);
     updateRoleButtons();
-    dataRetryTimer = setInterval(tryDataConnection, 5000);
+    dataRetryTimer = setInterval(tryDataConnection, 3000);
     tryDataConnection();
   }).catch(error => {
     console.warn("Could not restore saved side:", error);
