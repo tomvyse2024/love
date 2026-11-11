@@ -957,7 +957,7 @@ async function initFirebaseNotifications() {
     if (Notification.permission === "granted") {
       new Notification(title, {
         body,
-        icon: "./icon-192.png",
+        icon: "./heart-icon.svg",
         tag: "tom-love-incoming-call"
       });
     }
