@@ -938,7 +938,10 @@ function setNotificationStatus(message) {
 }
 
 async function initFirebaseNotifications() {
-  if (!window.firebase || !firebase.messaging || !firebase.messaging.isSupported) {
+  if (!window.firebase || !firebase.messaging || typeof firebase.messaging.isSupported !== "function") {
+    throw new Error("This browser does not support Firebase notifications.");
+  }
+  if (!(await firebase.messaging.isSupported())) {
     throw new Error("This browser does not support Firebase notifications.");
   }
   if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
@@ -996,10 +999,10 @@ async function enableCallNotifications() {
     const permission = await Notification.requestPermission();
     if (permission !== "granted") throw new Error("Notification permission was not granted.");
 
-    const pairingCode = sessionStorage.getItem("tom-love-pairing-code") ||
+    const pairingCode = localStorage.getItem("tom-love-pairing-code") ||
       prompt("Enter your TOM & LOVE pairing code:");
     if (!pairingCode) throw new Error("Pairing code is required.");
-    sessionStorage.setItem("tom-love-pairing-code", pairingCode);
+    localStorage.setItem("tom-love-pairing-code", pairingCode);
 
     await initFirebaseNotifications();
     const registration = await navigator.serviceWorker.register("./firebase-messaging-sw.js");
