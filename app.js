@@ -90,7 +90,11 @@ async function toggleTheatreFullscreen() {
     if (document.fullscreenElement) {
       await document.exitFullscreen();
     } else if (card.requestFullscreen) {
-      await card.requestFullscreen({ navigationUI: "hide" });
+      try {
+        await card.requestFullscreen({ navigationUI: "hide" });
+      } catch (_) {
+        await card.requestFullscreen();
+      }
     } else if (activeVideo.webkitEnterFullscreen) {
       // iOS Safari fallback: enter native video fullscreen.
       activeVideo.webkitEnterFullscreen();
