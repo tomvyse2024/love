@@ -17,8 +17,8 @@ messaging.onBackgroundMessage(payload => {
   const title = payload.notification?.title || "♡ TOM & LOVE";
   const options = {
     body: payload.notification?.body || "Your person is calling.",
-    icon: "./icon-192.png",
-    badge: "./icon-192.png",
+    icon: "./heart-icon.svg",
+    badge: "./heart-icon.svg",
     tag: "tom-love-incoming-call",
     requireInteraction: true,
     data: { url: "/love/" }
