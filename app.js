@@ -664,7 +664,7 @@ function updateRoleButtons() {
 
 function tryDataConnection() {
   if (!peer || !peer.open || !partnerPeerId) return;
-  if (dataConn && (dataConn.open || dataConn.opening)) return;
+  if (dataConn) return;
   const conn = peer.connect(partnerPeerId, {reliable:true});
   attachConnection(conn);
   conn.on("open", () => setRoleStatus("Partner connected ♡ You can chat and share a movie."));
