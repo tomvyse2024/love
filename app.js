@@ -913,7 +913,131 @@ $("chatInput").disabled = true;
 $("sendBtn").disabled = true;
 setSessionControls(false, false);
 
-// Restore the saved identity without requesting camera or microphone access.
+
+
+// TOM & LOVE — Firebase push notifications
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBD2lnyijjD4HJsJ1B1j1bvjGRDN0pnP_k",
+  authDomain: "tom-fix-everything.firebaseapp.com",
+  projectId: "tom-fix-everything",
+  storageBucket: "tom-fix-everything.firebasestorage.app",
+  messagingSenderId: "1062380316397",
+  appId: "1:1062380316397:web:4e6b159e8deadcc1570ee4",
+  measurementId: "G-F4TNPMK340"
+};
+const NOTIFY_WORKER = "https://tom-love-notify.kotom2003mdy.workers.dev";
+const FCM_VAPID_KEY = "BKjl5eXbLdSciuFDgaxei8TQPbn9dm4Flx-iIoOkPqaJKVHq-we1Dd_0atp2nVE1hVxzwTN3FbP-BFI2Kgm4680";
+let firebaseMessaging = null;
+let firebaseReady = false;
+let firebaseUser = null;
+
+function setNotificationStatus(message) {
+  const el = $("notificationStatus");
+  if (el) el.textContent = message;
+}
+
+async function initFirebaseNotifications() {
+  if (!window.firebase || !firebase.messaging || !firebase.messaging.isSupported) {
+    throw new Error("This browser does not support Firebase notifications.");
+  }
+  if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+  const auth = firebase.auth();
+  if (!auth.currentUser) await auth.signInAnonymously();
+  firebaseUser = auth.currentUser;
+  firebaseMessaging = firebase.messaging();
+  firebaseReady = true;
+
+  firebaseMessaging.onMessage(payload => {
+    const title = payload.notification?.title || "♡ TOM & LOVE";
+    const body = payload.notification?.body || "Your person is calling.";
+    if (Notification.permission === "granted") {
+      new Notification(title, {
+        body,
+        icon: "./icon-192.png",
+        tag: "tom-love-incoming-call"
+      });
+    }
+    setNotificationStatus("Notifications are enabled ♡");
+  });
+}
+
+async function workerRequest(path, body, pairingCode) {
+  const user = firebase.auth().currentUser;
+  if (!user) throw new Error("Firebase sign-in is not ready.");
+  const idToken = await user.getIdToken();
+  const response = await fetch(NOTIFY_WORKER + path, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + idToken,
+      "X-Pairing-Code": pairingCode
+    },
+    body: JSON.stringify(body)
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Notification server error.");
+  return result;
+}
+
+async function enableCallNotifications() {
+  const button = $("enableNotificationsBtn");
+  if (!mySide) {
+    setNotificationStatus("အရင်ဆုံး YE သို့မဟုတ် MYAT ကိုရွေးပါ။");
+    return;
+  }
+  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
+    setNotificationStatus("ဒီ Browser မှာ Web Notifications မရနိုင်ပါ။ Chrome ကိုသုံးပါ။");
+    return;
+  }
+  button.disabled = true;
+  try {
+    setNotificationStatus("Preparing secure notification connection…");
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") throw new Error("Notification permission was not granted.");
+
+    const pairingCode = sessionStorage.getItem("tom-love-pairing-code") ||
+      prompt("Enter your TOM & LOVE pairing code:");
+    if (!pairingCode) throw new Error("Pairing code is required.");
+    sessionStorage.setItem("tom-love-pairing-code", pairingCode);
+
+    await initFirebaseNotifications();
+    const registration = await navigator.serviceWorker.register("./firebase-messaging-sw.js");
+    const token = await firebaseMessaging.getToken({
+      vapidKey: FCM_VAPID_KEY,
+      serviceWorkerRegistration: registration
+    });
+    if (!token) throw new Error("Could not create a notification device token.");
+
+    const result = await workerRequest("/register", {side:mySide, token}, pairingCode);
+    setNotificationStatus(result.registered + " device notifications enabled ♡");
+    button.textContent = "✓ Notifications Enabled";
+  } catch (error) {
+    console.error("Enable notifications:", error);
+    setNotificationStatus(error.message || "Could not enable notifications.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function notifyPartnerCall(callType) {
+  try {
+    if (!firebase.apps.length || !firebase.auth().currentUser) return;
+    const pairingCode = sessionStorage.getItem("tom-love-pairing-code");
+    if (!pairingCode) {
+      setNotificationStatus("Enable Call Notifications first to alert your partner.");
+      return;
+    }
+    await workerRequest("/invite", {from:mySide, callType}, pairingCode);
+  } catch (error) {
+    console.warn("Call notification:", error);
+    setNotificationStatus("Call started, but notification could not be sent: " + error.message);
+  }
+}
+
+if ($("enableNotificationsBtn")) {
+  $("enableNotificationsBtn").addEventListener("click", enableCallNotifications);
+}
+\n// Restore the saved identity without requesting camera or microphone access.
 const savedSide = localStorage.getItem("ldr-side");
 if (savedSide === "YE" || savedSide === "MYAT") {
   mySide = savedSide;
