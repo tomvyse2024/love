@@ -589,7 +589,34 @@ footer span {
   width:100%;
   height:100%;
   object-fit:contain;
+  object-position:center center;
   background:#000;
+}
+/* The sharer must not preview the captured desktop inside the captured page. */
+.call-card.local-sharing:not(.theatre-mode) .video-grid{display:none!important}
+.call-card.local-sharing:not(.theatre-mode) .theatre-fullscreen-btn{display:none!important}
+/* Fullscreen receiver: fill every edge of the phone display. This crops a little
+   from the sides/top when the shared screen and phone have different ratios. */
+.call-card.theatre-mode:fullscreen .video-grid,
+.call-card.theatre-mode:fullscreen .video-box.remote-screen{
+  width:100vw!important;
+  height:100dvh!important;
+  min-height:0!important;
+  margin:0!important;
+}
+.call-card.theatre-mode:fullscreen .video-box.remote-screen video,
+.call-card.theatre-mode #remoteVideo:fullscreen{
+  width:100vw!important;
+  height:100dvh!important;
+  object-fit:cover!important;
+  object-position:center center!important;
+}
+.call-card.theatre-mode:-webkit-full-screen .video-box.remote-screen video,
+.call-card.theatre-mode #remoteVideo:-webkit-full-screen{
+  width:100vw!important;
+  height:100vh!important;
+  object-fit:cover!important;
+  object-position:center center!important;
 }
 .call-card.theatre-mode .video-label,
 .call-card.theatre-mode .video-placeholder{display:none!important}
