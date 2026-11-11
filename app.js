@@ -73,46 +73,99 @@ function setTheatreMode(active, source = "remote") {
     $("cameraBtn").querySelector("small").textContent =
       cameraOn ? "Camera off" : "Camera on";
 
-    if (document.fullscreenElement === card) {
+    if (document.fullscreenElement === card ||
+        document.fullscreenElement === $("remoteVideo") ||
+        document.fullscreenElement === $("localVideo")) {
       document.exitFullscreen?.().catch(() => {});
     }
+    $("remoteVideo").controls = false;
     setCallState(currentCall ? "YOU ARE TOGETHER ♡" : "WAITING TO CONNECT");
   }
 }
 
 async function toggleTheatreFullscreen() {
   const card = $("callCard");
-  const activeVideo = card.classList.contains("local-sharing")
-    ? $("localVideo")
-    : $("remoteVideo");
+  const isLocalSharer = card.classList.contains("local-sharing");
+  const activeVideo = isLocalSharer ? $("localVideo") : $("remoteVideo");
 
   try {
+    // Exit whichever element is currently fullscreen.
     if (document.fullscreenElement) {
       await document.exitFullscreen();
-    } else if (card.requestFullscreen) {
+      return;
+    }
+    if (activeVideo.webkitDisplayingFullscreen) {
+      activeVideo.webkitExitFullscreen?.();
+      return;
+    }
+
+    if (isLocalSharer) {
+      // The sharer keeps the theatre controls around their own screen preview.
+      if (card.requestFullscreen) {
+        try {
+          await card.requestFullscreen({ navigationUI: "hide" });
+        } catch (_) {
+          await card.requestFullscreen();
+        }
+      } else if (activeVideo.requestFullscreen) {
+        await activeVideo.requestFullscreen();
+      } else if (activeVideo.webkitEnterFullscreen) {
+        activeVideo.webkitEnterFullscreen();
+      } else {
+        throw new Error("Fullscreen is not supported by this browser.");
+      }
+      return;
+    }
+
+    // The viewer (especially Android mobile) fullscreenes the received video
+    // element itself. Mobile browsers handle video fullscreen more reliably
+    // than fullscreening a large page container.
+    activeVideo.controls = true;
+    if (activeVideo.requestFullscreen) {
       try {
-        await card.requestFullscreen({ navigationUI: "hide" });
+        await activeVideo.requestFullscreen({ navigationUI: "hide" });
       } catch (_) {
-        await card.requestFullscreen();
+        await activeVideo.requestFullscreen();
       }
     } else if (activeVideo.webkitEnterFullscreen) {
-      // iOS Safari fallback: enter native video fullscreen.
       activeVideo.webkitEnterFullscreen();
+    } else if (card.requestFullscreen) {
+      await card.requestFullscreen();
     } else {
       throw new Error("Fullscreen is not supported by this browser.");
     }
   } catch (error) {
+    activeVideo.controls = false;
     console.warn("Fullscreen:", error);
-    setRoleStatus("Full screen မရသေးပါ။ Browser ကို update လုပ်ပြီး ထပ်စမ်းပါ။");
+    setRoleStatus("ဒီဖုန်း Browser မှာ Full screen မရသေးပါ။ Chrome နဲ့ ထပ်စမ်းပါ။");
   }
 }
 
 $("theatreFullscreenBtn").addEventListener("click", toggleTheatreFullscreen);
-document.addEventListener("fullscreenchange", () => {
-  const isFullscreen = document.fullscreenElement === $("callCard");
+
+function updateTheatreFullscreenLabel() {
+  const card = $("callCard");
+  const activeVideo = card.classList.contains("local-sharing")
+    ? $("localVideo")
+    : $("remoteVideo");
+  const isFullscreen =
+    document.fullscreenElement === card ||
+    document.fullscreenElement === activeVideo ||
+    !!activeVideo.webkitDisplayingFullscreen;
+
   $("theatreFullscreenBtn").querySelector("small").textContent =
     isFullscreen ? "Exit full screen" : "Full screen";
-});
+
+  // Keep native playback controls only while the received video is fullscreen.
+  if (document.fullscreenElement !== $("remoteVideo") &&
+      !$("remoteVideo").webkitDisplayingFullscreen) {
+    $("remoteVideo").controls = false;
+  }
+}
+
+document.addEventListener("fullscreenchange", updateTheatreFullscreenLabel);
+$("remoteVideo").addEventListener("webkitendfullscreen", updateTheatreFullscreenLabel);
+$("remoteVideo").addEventListener("webkitbeginfullscreen", updateTheatreFullscreenLabel);
 
 function addMessage(text, mine, name = "Partner") {
   const box = $("messages");
