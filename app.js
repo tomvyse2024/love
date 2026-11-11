@@ -640,8 +640,7 @@ function updateRoleButtons() {
 function tryDataConnection() {
   // YE alone initiates the data channel; MYAT waits for the incoming connection.
   if (mySide !== "YE" || !peer || !peer.open || !partnerPeerId) return;
-  if (dataConn && dataConn.open) return;
-  if (dataConn && !dataConn.open) dataConn = null;
+  if (dataConn) return;
   const conn = peer.connect(partnerPeerId, {reliable:true});
   attachConnection(conn);
   conn.on("open", () => setRoleStatus("Partner connected ♡ You can chat and share a movie."));
