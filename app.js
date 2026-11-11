@@ -115,14 +115,14 @@ function attachConnection(conn) {
   });
 }
 
-function setupPeer() {
+function setupPeer(peerId) {
   return new Promise((resolve, reject) => {
     if (!window.Peer) {
       reject(new Error("PeerJS could not load."));
       return;
     }
 
-    peer = new Peer(undefined, {
+    peer = new Peer(peerId || undefined, {
       debug: 1
     });
 
@@ -642,3 +642,118 @@ function sendMovieSync(action) {
 moviePlayer.addEventListener("play", () => sendMovieSync("play"));
 moviePlayer.addEventListener("pause", () => sendMovieSync("pause"));
 moviePlayer.addEventListener("seeked", () => sendMovieSync("seek"));
+
+
+/* V2.1 — Fixed YE / MYAT identities; no room code */
+const YE_PEER_ID = "ye-tomvyse2024-love";
+const MYAT_PEER_ID = "myat-tomvyse2024-love";
+let mySide = null;
+let partnerPeerId = null;
+let dataRetryTimer = null;
+
+function setRoleStatus(message) {
+  const el = $("roleStatus");
+  if (el) el.textContent = message;
+}
+
+function updateRoleButtons() {
+  $("chooseYeBtn").classList.toggle("selected", mySide === "YE");
+  $("chooseMyatBtn").classList.toggle("selected", mySide === "MYAT");
+  $("callPartnerBtn").disabled = !peer || !peer.open || !partnerPeerId;
+}
+
+function tryDataConnection() {
+  if (!peer || !peer.open || !partnerPeerId) return;
+  if (dataConn && (dataConn.open || dataConn.opening)) return;
+  const conn = peer.connect(partnerPeerId, {reliable:true});
+  attachConnection(conn);
+  conn.on("open", () => setRoleStatus("Partner connected ♡ You can chat and share a movie."));
+  conn.on("error", err => console.warn("Auto data connection:", err));
+}
+
+async function selectSide(side) {
+  if (busy) return;
+  if (peer && peer.open && mySide === side) {
+    setRoleStatus(side + " side is ready. Waiting for your partner…");
+    return;
+  }
+  if (peer) {
+    try { peer.destroy(); } catch (_) {}
+    peer = null;
+  }
+  if (dataRetryTimer) clearInterval(dataRetryTimer);
+  dataConn = null;
+  currentCall = null;
+  mySide = side;
+  partnerPeerId = side === "YE" ? MYAT_PEER_ID : YE_PEER_ID;
+  localStorage.setItem("ldr-side", side);
+  updateRoleButtons();
+  setRoleStatus("Starting " + side + " side… allow camera and microphone if asked.");
+  busy = true;
+  try {
+    await getMedia();
+    const myPeerId = side === "YE" ? YE_PEER_ID : MYAT_PEER_ID;
+    await setupPeer(myPeerId);
+    setRoleStatus(side + " side is online ♡ Waiting for your partner…");
+    updateRoleButtons();
+    // Re-attempt the data channel when the other person comes online.
+    dataRetryTimer = setInterval(tryDataConnection, 5000);
+    tryDataConnection();
+    $("createBtn").disabled = true;
+    $("joinBtn").disabled = true;
+  } catch (err) {
+    console.error(err);
+    setRoleStatus("Could not start. This fixed ID may be busy, or camera/mic permission was denied. Try again.");
+    if (peer) { peer.destroy(); peer = null; }
+    $("callPartnerBtn").disabled = true;
+  } finally {
+    busy = false;
+  }
+}
+
+$("chooseYeBtn").addEventListener("click", () => selectSide("YE"));
+$("chooseMyatBtn").addEventListener("click", () => selectSide("MYAT"));
+$("changeSideBtn").addEventListener("click", () => {
+  if (currentCall) currentCall.close();
+  if (dataConn) dataConn.close();
+  if (peer) peer.destroy();
+  if (dataRetryTimer) clearInterval(dataRetryTimer);
+  peer = null; currentCall = null; dataConn = null; mySide = null; partnerPeerId = null;
+  localStorage.removeItem("ldr-side");
+  $("callPartnerBtn").disabled = true;
+  setRoleStatus("Choose YE or MYAT to connect to your own side.");
+  updateRoleButtons();
+});
+$("callPartnerBtn").addEventListener("click", async () => {
+  if (!peer || !peer.open || !partnerPeerId) {
+    setRoleStatus("Choose your side first.");
+    return;
+  }
+  try {
+    if (currentCall && currentCall.open) currentCall.close();
+    currentCall = peer.call(partnerPeerId, localStream);
+    if (!currentCall) throw new Error("Call could not be started.");
+    setCallState("CALLING YOUR PERSON…");
+    setRoleStatus("Calling " + (mySide === "YE" ? "MYAT" : "YE") + "…");
+    currentCall.on("stream", stream => {
+      $("remoteVideo").srcObject = stream;
+      $("remotePlaceholder").style.display = "none";
+      setCallState("YOU ARE TOGETHER ♡");
+      setStatus("Video call connected", true);
+      setRoleStatus("Connected with your person ♡");
+    });
+    currentCall.on("close", resetRemote);
+    currentCall.on("error", err => { console.warn(err); resetRemote(); setRoleStatus("Call ended. You can call again."); });
+  } catch (err) {
+    console.error(err);
+    setRoleStatus("Partner may be offline. Ask them to open the website and choose their side.");
+  }
+});
+
+// Restore the selected identity on the next visit, but always require a user tap
+// to re-enable camera/microphone and register the browser with PeerJS.
+const savedSide = localStorage.getItem("ldr-side");
+if (savedSide === "YE" || savedSide === "MYAT") {
+  setRoleStatus("Last time you used " + savedSide + ". Tap its button to come online.");
+  updateRoleButtons();
+}
