@@ -1,15 +1,13 @@
 
 const $ = id => document.getElementById(id);
 
-const YE_PEER_ID = "ye-tomvyse2024-love";
-const MYAT_PEER_ID = "myat-tomvyse2024-love";
-
-let peer = null;
-let mySide = null;
-let partnerPeerId = null;
+const PRESENCE_WORKER = "https://tom-love-presence.kotom2003mdy.workers.dev";
+const DEVICE_ID_PREFIX = "tom-love-device-id-";
+let peer = null, mySide = null, localPeerId = null, localDeviceId = null;
+let localDeviceLabel = "Device", partnerPeerId = null, partnerDevices = [];
 let dataConn = null;
-let dataRetryTimer = null;
-let dataConnectTimeout = null;
+const dataConnections = new Map();
+let dataRetryTimer = null, heartbeatTimer = null, presenceCode = null;
 
 let currentCall = null;
 let localStream = null;       // Microphone stream.
@@ -47,13 +45,19 @@ function setRoleStatus(message) {
   if (el) el.textContent = message;
 }
 
+function hasOpenDataConnection() { return [...dataConnections.values()].some(conn => conn && conn.open); }
+function getOpenDataConnections() { return [...dataConnections.values()].filter(conn => conn && conn.open); }
+function sendToAllDataConnections(data) {
+  const list = getOpenDataConnections();
+  for (const conn of list) { try { conn.send(data); } catch (error) { console.warn("Broadcast send:", error); } }
+  return list.length;
+}
 function updateRoleButtons() {
   $("chooseYeBtn").classList.toggle("selected", mySide === "YE");
   $("chooseMyatBtn").classList.toggle("selected", mySide === "MYAT");
-  const ready = !!(peer && peer.open && partnerPeerId && dataConn && dataConn.open && !currentCall);
-  $("callPartnerBtn").disabled = !ready;
-  $("videoCallBtn").disabled = !ready;
-  $("phoneCallBtn").disabled = !ready;
+  const ready = !!(peer && peer.open && partnerPeerId && !currentCall);
+  $("callPartnerBtn").disabled = !ready; $("videoCallBtn").disabled = !ready; $("phoneCallBtn").disabled = !ready;
+  const picker = $("partnerDeviceSelect"); if (picker) picker.disabled = partnerDevices.length === 0;
 }
 
 function setSessionControls(active, localSharing = false) {
@@ -62,7 +66,7 @@ function setSessionControls(active, localSharing = false) {
   $("shareBtn").disabled = !localSharing;
   $("callCard").classList.toggle("session-active", active);
   $("callCard").classList.toggle("local-sharing", active && localSharing);
-  const ready = !!(peer && peer.open && partnerPeerId && dataConn && dataConn.open && !active);
+  const ready = !!(peer && peer.open && partnerPeerId && !active);
   $("callPartnerBtn").disabled = !ready;
   $("videoCallBtn").disabled = !ready;
   $("phoneCallBtn").disabled = !ready;
@@ -320,63 +324,30 @@ function addMessage(message, mine, name = "Partner") {
 }
 
 function enableChatControls() {
-  $("chatInput").disabled = false;
-  $("sendBtn").disabled = false;
+  const connected = hasOpenDataConnection(); $("chatInput").disabled = !connected; $("sendBtn").disabled = !connected;
 }
-
+function getDeviceLabel(id) { const d = partnerDevices.find(x => x.peerId === id); return d ? (d.label || "Partner device") : "Partner device"; }
 function attachConnection(conn) {
-  // Keep only the newest live data channel; stale channels must not block retry.
-  if (dataConn && dataConn !== conn) {
-    try { dataConn.close(); } catch (_) {}
-  }
-  dataConn = conn;
-
+  if (!conn || !conn.peer) return;
+  const id = conn.peer, old = dataConnections.get(id);
+  if (old && old !== conn) { try { old.close(); } catch (_) {} }
+  dataConnections.set(id, conn);
   conn.on("open", () => {
-    if (dataConnectTimeout) {
-      clearTimeout(dataConnectTimeout);
-      dataConnectTimeout = null;
-    }
-    if (dataConn !== conn) return;
-    setStatus("Connected with your person", true);
-    enableChatControls();
-    updateRoleButtons();
-    setRoleStatus("နှစ်ယောက်လုံး ချိတ်ဆက်ပြီးပါပြီ ♡ Start Movie Share ကိုနှိပ်နိုင်ပါပြီ။");
+    if (conn.__tomTimeout) { clearTimeout(conn.__tomTimeout); conn.__tomTimeout = null; }
+    dataConnections.set(id, conn); if (!dataConn || !dataConn.open || id === partnerPeerId) dataConn = conn;
+    setStatus("Connected with " + getDeviceLabel(id), true); enableChatControls(); updateRoleButtons();
+    setRoleStatus("Partner ဘက်က Device " + getOpenDataConnections().length + " လုံး ချိတ်ဆက်ထားပါပြီ ♡");
   });
-
-  conn.on("data", data => {
-    if (dataConn !== conn) return;
-    if (data && data.type === "chat") {
-      addMessage(String(data.text || ""), false, String(data.name || "Partner"));
-      return;
-    }
-    handleMovieData(data);
-  });
-
-  conn.on("close", () => {
-    if (dataConnectTimeout) {
-      clearTimeout(dataConnectTimeout);
-      dataConnectTimeout = null;
-    }
-    if (dataConn === conn) {
-      dataConn = null;
-      $("chatInput").disabled = true;
-      $("sendBtn").disabled = true;
-      updateRoleButtons();
-      setStatus("Partner disconnected — reconnecting…");
-      setRoleStatus("ချိတ်ဆက်မှု ပြတ်သွားပါတယ်။ အလိုအလျောက် ပြန်ချိတ်နေပါတယ်…");
-    }
-  });
-
-  conn.on("error", error => {
-    console.warn("Data connection:", error);
-    if (dataConnectTimeout) {
-      clearTimeout(dataConnectTimeout);
-      dataConnectTimeout = null;
-    }
-    if (dataConn === conn && !conn.open) dataConn = null;
-    try { conn.close(); } catch (_) {}
-    updateRoleButtons();
-  });
+  conn.on("data", data => { if (data && data.type === "chat") { addMessage(String(data.text || ""), false, String(data.name || "Partner")); return; } handleMovieData(data); });
+  const remove = () => {
+    if (conn.__tomTimeout) clearTimeout(conn.__tomTimeout);
+    if (dataConnections.get(id) === conn) dataConnections.delete(id);
+    if (dataConn === conn) dataConn = getOpenDataConnections()[0] || null;
+    enableChatControls(); updateRoleButtons();
+    if (!hasOpenDataConnection()) { setStatus("Partner disconnected — reconnecting…"); setRoleStatus("ချိတ်ဆက်မှု ပြတ်သွားပါတယ်။ အလိုအလျောက် ပြန်ချိတ်နေပါတယ်…"); }
+  };
+  conn.on("close", remove); conn.on("error", err => { console.warn("Data connection:", err); remove(); try { conn.close(); } catch (_) {} });
+  if (!conn.open) conn.__tomTimeout = setTimeout(() => { if (!conn.open) { try { conn.close(); } catch (_) {} remove(); } }, 10000);
 }
 
 function bindCallEvents(call, direction, kind = "movie-screen-share") {
@@ -522,61 +493,34 @@ function setupPeer(peerId) {
   });
 }
 
-function tryDataConnection() {
-  // YE is the single initiator. MYAT accepts the incoming channel.
-  if (mySide !== "YE" || !peer || peer.destroyed || !partnerPeerId) return;
-
-  if (peer.disconnected) {
-    try { peer.reconnect(); } catch (error) {
-      console.warn("Peer signaling reconnect:", error);
-    }
-    return;
-  }
-  if (!peer.open) return;
-
-  if (dataConn) {
-    if (dataConn.open) return;
-    // Do not let a failed or stalled attempt block automatic retries.
-    if (dataConn.open === false && dataConn.peerConnection &&
-        dataConn.peerConnection.connectionState === "closed") {
-      try { dataConn.close(); } catch (_) {}
-      dataConn = null;
-    } else if (dataConn.open === false && dataConnectTimeout) {
-      return;
-    } else if (dataConn.open === false) {
-      try { dataConn.close(); } catch (_) {}
-      dataConn = null;
-    }
-  }
-
-  const conn = peer.connect(partnerPeerId, {reliable:true});
-  if (!conn) return;
-  attachConnection(conn);
-
-  // PeerJS can return a pending channel even when the partner ID is not
-  // reachable. Expire it so the 3-second retry loop can try again cleanly.
-  if (dataConnectTimeout) clearTimeout(dataConnectTimeout);
-  dataConnectTimeout = setTimeout(() => {
-    if (dataConn === conn && !conn.open) {
-      console.warn("Data connection attempt timed out; retrying.");
-      try { conn.close(); } catch (_) {}
-      dataConn = null;
-      updateRoleButtons();
-      setRoleStatus("Partner ကို ရှာဖွေနေဆဲပါ။ အလိုအလျောက် ပြန်ချိတ်နေပါတယ်…");
-    }
-    dataConnectTimeout = null;
-  }, 8000);
-
-  conn.on("error", error => {
-    console.warn("Auto data connection:", error);
-    if (dataConnectTimeout) {
-      clearTimeout(dataConnectTimeout);
-      dataConnectTimeout = null;
-    }
-    if (dataConn === conn) dataConn = null;
-    try { conn.close(); } catch (_) {}
+async function refreshPartnerDevices() {
+  if (!mySide) return;
+  try {
+    const r = await presenceRequest("/devices", {side:mySide === "YE" ? "MYAT" : "YE"});
+    partnerDevices = Array.isArray(r.devices) ? r.devices : [];
+    const picker = $("partnerDeviceSelect"), previous = picker ? (picker.value || partnerPeerId) : partnerPeerId;
+    if (picker) {
+      picker.innerHTML = "";
+      if (!partnerDevices.length) { const o=document.createElement("option"); o.value=""; o.textContent="Waiting for partner devices…"; picker.appendChild(o); partnerPeerId=null; }
+      else {
+        partnerDevices.forEach(d => { const o=document.createElement("option"); o.value=d.peerId; o.textContent=d.label || "Partner device"; picker.appendChild(o); });
+        partnerPeerId = partnerDevices.some(d => d.peerId === previous) ? previous : partnerDevices[0].peerId; picker.value=partnerPeerId;
+      }
+    } else partnerPeerId=partnerDevices[0]?.peerId || null;
     updateRoleButtons();
-  });
+  } catch (e) { console.warn("Device discovery:",e); }
+}
+async function tryDataConnection() {
+  if (!mySide || !peer || peer.destroyed) return;
+  if (peer.disconnected) { try { peer.reconnect(); } catch(e) { console.warn(e); } return; }
+  if (!peer.open) return;
+  await refreshPartnerDevices();
+  if (mySide !== "YE") return;
+  for (const d of partnerDevices) {
+    if (!d.peerId || d.peerId === localPeerId) continue;
+    const old=dataConnections.get(d.peerId); if (old && (old.open || old.__tomTimeout)) continue;
+    const conn=peer.connect(d.peerId,{reliable:true}); if(conn) attachConnection(conn);
+  }
 }
 
 async function startMovieShare() {
@@ -584,10 +528,7 @@ async function startMovieShare() {
     setRoleStatus("အရင်ဆုံး YE သို့မဟုတ် MYAT ကိုရွေးပါ။");
     return;
   }
-  if (!dataConn || !dataConn.open) {
-    setRoleStatus("Myat ဘက်ကလည်း Website ဖွင့်ပြီး သူ့ Side ကိုရွေးထားပါ။ ချိတ်ဆက်ပြီးမှ Share လုပ်နိုင်ပါမယ်။");
-    return;
-  }
+  if (!partnerPeerId) { setRoleStatus("Partner ဘက်က Device တစ်ခု Online ဖြစ်လာမှ Share လုပ်နိုင်ပါမယ်။"); return; }
   if (currentCall) return;
 
   $("callPartnerBtn").disabled = true;
@@ -729,7 +670,7 @@ async function endSession(closeCall = true) {
 }
 
 async function startDirectCall(kind) {
-  if (!peer || !peer.open || !partnerPeerId || !dataConn || !dataConn.open) {
+  if (!peer || !peer.open || !partnerPeerId) {
     setRoleStatus("နှစ်ယောက်လုံး Side ရွေးပြီး ချိတ်ဆက်ထားမှ ခေါ်ဆိုနိုင်ပါတယ်。");
     return;
   }
@@ -792,82 +733,76 @@ $("chatForm").addEventListener("submit", event => {
   const message = input.value.trim();
   if (!message) return;
 
-  if (!dataConn || !dataConn.open) {
-    alert("Partner နဲ့ ချိတ်ဆက်ပြီးမှ Message ပို့နိုင်ပါတယ်။");
-    return;
+  if (!sendToAllDataConnections({type:"chat", text:message, name:mySide || "You"})) {
+    alert("Partner နဲ့ ချိတ်ဆက်ပြီးမှ Message ပို့နိုင်ပါတယ်။"); return;
   }
-
-  dataConn.send({type:"chat", text:message, name:mySide || "You"});
   addMessage(message, true);
   input.value = "";
 });
 
-async function selectSide(side) {
-  if (busy) return;
-  if (peer && peer.open && mySide === side) {
-    setRoleStatus(side + " side is ready. Partner ကို စောင့်နေပါတယ်…");
-    return;
-  }
-
-  busy = true;
-  try {
-    await endSession();
-    if (dataRetryTimer) clearInterval(dataRetryTimer);
-    if (dataConn) {
-      try { dataConn.close(); } catch (_) {}
-      dataConn = null;
-    }
-    if (peer) {
-      try { peer.destroy(); } catch (_) {}
-      peer = null;
-    }
-
-    mySide = side;
-    partnerPeerId = side === "YE" ? MYAT_PEER_ID : YE_PEER_ID;
-    localStorage.setItem("ldr-side", side);
-    setRoleStatus("Starting " + side + " side… Camera နဲ့ Microphone မဖွင့်သေးပါ။");
-    setStatus("Connecting your room…");
-
-    await setupPeer(side === "YE" ? YE_PEER_ID : MYAT_PEER_ID);
-    setRoleStatus(side + " side is online ♡ Partner ကို စောင့်နေပါတယ်။");
-    setStatus("Your side is online", true);
-    updateRoleButtons();
-
-    dataRetryTimer = setInterval(tryDataConnection, 3000);
-    tryDataConnection();
-  } catch (error) {
-    console.error(error);
-    setRoleStatus("Room မချိတ်ဆက်နိုင်ပါ။ ခဏစောင့်ပြီး ထပ်စမ်းပါ။");
-    if (peer) {
-      peer.destroy();
-      peer = null;
-    }
-    updateRoleButtons();
-  } finally {
-    busy = false;
-  }
+function getPresencePairingCode() {
+  if (presenceCode) return presenceCode;
+  let code=localStorage.getItem("tom-love-pairing-code");
+  if (!code) { code=prompt("Enter your TOM & LOVE pairing code to join the private room:"); if(!code) throw new Error("Pairing code is required."); localStorage.setItem("tom-love-pairing-code",code); }
+  presenceCode=code; return code;
 }
-
+async function presenceRequest(path,payload={}) {
+  const r=await fetch(PRESENCE_WORKER+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,pairingCode:getPresencePairingCode()})});
+  const data=await r.json().catch(()=>({})); if(!r.ok) throw new Error(data.error || "Presence service request failed."); return data;
+}
+function makeDeviceLabel() {
+  const ua=navigator.userAgent||"";
+  const platform=/Macintosh|Mac OS/.test(ua)?"Mac":/Android/.test(ua)?"Android":/Windows/.test(ua)?"Windows":/iPhone|iPad/.test(ua)?"iPhone/iPad":"Browser";
+  const browser=ua.includes("Edg/")?"Edge":ua.includes("Chrome/")?"Chrome":ua.includes("Firefox/")?"Firefox":ua.includes("Safari/")?"Safari":"Browser";
+  return platform+" • "+browser;
+}
+async function registerPresence(side) {
+  localDeviceId=localStorage.getItem(DEVICE_ID_PREFIX+side);
+  if(!localDeviceId){localDeviceId=crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+Math.random().toString(36).slice(2));localStorage.setItem(DEVICE_ID_PREFIX+side,localDeviceId);}
+  localDeviceLabel=makeDeviceLabel();
+  localPeerId="tom-love-"+side.toLowerCase()+"-"+localDeviceId.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,48);
+  await presenceRequest("/register",{side,deviceId:localDeviceId,peerId:localPeerId,label:localDeviceLabel});
+  if(heartbeatTimer)clearInterval(heartbeatTimer);
+  heartbeatTimer=setInterval(()=>presenceRequest("/heartbeat",{side,deviceId:localDeviceId}).catch(e=>console.warn("Heartbeat:",e)),30000);
+}
+async function stopPresence() {
+  if(heartbeatTimer)clearInterval(heartbeatTimer);heartbeatTimer=null;
+  if(dataRetryTimer)clearInterval(dataRetryTimer);dataRetryTimer=null;
+  if(mySide&&localDeviceId){try{await presenceRequest("/unregister",{side:mySide,deviceId:localDeviceId});}catch(e){console.warn("Unregister:",e);}}
+}
+async function selectSide(side) {
+  if(busy)return;
+  if(peer&&peer.open&&mySide===side){setRoleStatus(side+" side is ready. Partner ကို စောင့်နေပါတယ်…");return;}
+  busy=true;
+  try{
+    await endSession();await stopPresence();
+    for(const c of dataConnections.values()){try{c.close();}catch(_){}}
+    dataConnections.clear();dataConn=null;
+    if(peer){try{peer.destroy();}catch(_){}peer=null;}
+    mySide=side;partnerPeerId=null;localStorage.setItem("ldr-side",side);
+    setRoleStatus("Starting "+side+" side… Camera နဲ့ Microphone မဖွင့်သေးပါ။");setStatus("Connecting your room…");
+    getPresencePairingCode();
+    const id=localStorage.getItem(DEVICE_ID_PREFIX+side)||(crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+Math.random().toString(36).slice(2)));
+    localStorage.setItem(DEVICE_ID_PREFIX+side,id);localDeviceId=id;localDeviceLabel=makeDeviceLabel();
+    localPeerId="tom-love-"+side.toLowerCase()+"-"+id.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,48);
+    await setupPeer(localPeerId);await registerPresence(side);await refreshPartnerDevices();
+    setRoleStatus(side+" side is online ♡ Partner ရဲ့ Device တွေကို ရှာနေပါတယ်။");setStatus("Your side is online",true);updateRoleButtons();
+    dataRetryTimer=setInterval(()=>{tryDataConnection();},8000);tryDataConnection();
+  }catch(e){console.error(e);setRoleStatus(e.message||"Room မချိတ်ဆက်နိုင်ပါ။ ခဏစောင့်ပြီး ထပ်စမ်းပါ။");if(peer){peer.destroy();peer=null;}updateRoleButtons();}
+  finally{busy=false;}
+}
 $("chooseYeBtn").addEventListener("click", () => selectSide("YE"));
 $("chooseMyatBtn").addEventListener("click", () => selectSide("MYAT"));
+$("partnerDeviceSelect").addEventListener("change", event => { partnerPeerId=event.target.value||null; updateRoleButtons(); });
 
 $("changeSideBtn").addEventListener("click", async () => {
-  await endSession();
-  if (dataRetryTimer) clearInterval(dataRetryTimer);
-  if (dataConn) {
-    try { dataConn.close(); } catch (_) {}
-    dataConn = null;
-  }
-  if (peer) {
-    try { peer.destroy(); } catch (_) {}
-    peer = null;
-  }
-  mySide = null;
-  partnerPeerId = null;
-  localStorage.removeItem("ldr-side");
-  setRoleStatus("Choose YE or MYAT to connect to your own side.");
-  setStatus("Ready for love");
-  updateRoleButtons();
+  await endSession();await stopPresence();
+  for(const c of dataConnections.values()){try{c.close();}catch(_){}}
+  dataConnections.clear();dataConn=null;
+  if(peer){try{peer.destroy();}catch(_){}peer=null;}
+  mySide=null;localPeerId=null;localDeviceId=null;partnerDevices=[];partnerPeerId=null;
+  const picker=$("partnerDeviceSelect");if(picker)picker.innerHTML='<option value="">Choose your side first</option>';
+  localStorage.removeItem("ldr-side");setRoleStatus("Choose YE or MYAT to connect to your own side.");setStatus("Ready for love");updateRoleButtons();
 });
 
 function movieSay(message) {
@@ -900,9 +835,8 @@ $("movieFile").addEventListener("change", async () => {
   }
 
   movieLoad(file, file.name);
-  if (!dataConn || !dataConn.open) {
-    movieSay("Movie loaded on this device. Connect with your partner to send it.");
-    return;
+  if (!hasOpenDataConnection()) {
+    movieSay("Movie loaded on this device. Waiting for partner devices to connect before sending."); return;
   }
 
   try {
@@ -911,26 +845,15 @@ $("movieFile").addEventListener("change", async () => {
     $("movieProgressBar").style.width = "0%";
 
     const total = Math.ceil(file.size / MOVIE_CHUNK_SIZE);
-    dataConn.send({
-      type:"movie-start", name:file.name, mime:file.type || "video/mp4",
-      size:file.size, total
-    });
-
-    for (let i = 0; i < total; i++) {
-      if (!dataConn || !dataConn.open) throw new Error("Connection closed during transfer.");
-      while (dataConn && dataConn.open && dataConn.dataChannel &&
-             dataConn.dataChannel.bufferedAmount > 512 * 1024) {
-        await new Promise(resolve => setTimeout(resolve, 25));
-      }
-      if (!dataConn || !dataConn.open) throw new Error("Connection closed during transfer.");
-
-      const chunk = file.slice(i * MOVIE_CHUNK_SIZE, Math.min(file.size, (i + 1) * MOVIE_CHUNK_SIZE));
-      dataConn.send(chunk);
-      $("movieProgressBar").style.width = Math.round(((i + 1) / total) * 100) + "%";
-      if (i % 4 === 0) await new Promise(resolve => setTimeout(resolve, 8));
+    sendToAllDataConnections({type:"movie-start",name:file.name,mime:file.type||"video/mp4",size:file.size,total});
+    for(let i=0;i<total;i++){
+      if(!hasOpenDataConnection())throw new Error("Connection closed during transfer.");
+      while(getOpenDataConnections().some(c=>c.dataChannel&&c.dataChannel.bufferedAmount>512*1024))await new Promise(resolve=>setTimeout(resolve,25));
+      const chunk=file.slice(i*MOVIE_CHUNK_SIZE,Math.min(file.size,(i+1)*MOVIE_CHUNK_SIZE));
+      sendToAllDataConnections(chunk);$("movieProgressBar").style.width=Math.round(((i+1)/total)*100)+"%";
+      if(i%4===0)await new Promise(resolve=>setTimeout(resolve,8));
     }
-
-    dataConn.send({type:"movie-end", name:file.name});
+    sendToAllDataConnections({type:"movie-end",name:file.name});
     movieSay("Movie sent to your partner ♡");
   } catch (error) {
     console.error("Movie transfer:", error);
@@ -990,9 +913,9 @@ function handleMovieData(data) {
 }
 
 function sendMovieSync(action) {
-  const player = $("moviePlayer");
-  if (movieSyncLock || !dataConn || !dataConn.open || !player.src) return;
-  dataConn.send({type:"movie-sync", action, time:player.currentTime || 0});
+  const player=$("moviePlayer");
+  if(movieSyncLock||!hasOpenDataConnection()||!player.src)return;
+  sendToAllDataConnections({type:"movie-sync",action,time:player.currentTime||0});
 }
 
 $("moviePlayer").addEventListener("play", () => sendMovieSync("play"));
@@ -1131,22 +1054,6 @@ if ($("enableNotificationsBtn")) {
   $("enableNotificationsBtn").addEventListener("click", enableCallNotifications);
 }
 
-// Restore the saved identity without requesting camera or microphone access.
-const savedSide = localStorage.getItem("ldr-side");
-if (savedSide === "YE" || savedSide === "MYAT") {
-  mySide = savedSide;
-  partnerPeerId = savedSide === "YE" ? MYAT_PEER_ID : YE_PEER_ID;
-  setRoleStatus("Restoring your " + savedSide + " side…");
-  updateRoleButtons();
-
-  setupPeer(savedSide === "YE" ? YE_PEER_ID : MYAT_PEER_ID).then(() => {
-    setRoleStatus(savedSide + " side is online ♡ Partner ကို စောင့်နေပါတယ်။");
-    setStatus("Your side is online", true);
-    updateRoleButtons();
-    dataRetryTimer = setInterval(tryDataConnection, 3000);
-    tryDataConnection();
-  }).catch(error => {
-    console.warn("Could not restore saved side:", error);
-    setRoleStatus("Tap your " + savedSide + " button to reconnect.");
-  });
-}
+// Restore the saved side using this browser's unique device identity.
+const savedSide=localStorage.getItem("ldr-side");
+if(savedSide==="YE"||savedSide==="MYAT")selectSide(savedSide);
