@@ -249,6 +249,7 @@ async function joinRoom() {
     }
 
     currentCall.on("stream", stream => {
+      enableControls();
       $("remoteVideo").srcObject = stream;
       $("remotePlaceholder").style.display = "none";
 
@@ -445,71 +446,35 @@ function resetRemote() {
   setCallState("WAITING TO CONNECT");
 }
 
-// LEAVE ROOM
-
+// END CALL — keep the YE/MYAT identity and PeerJS registration alive.
 $("endBtn").addEventListener("click", () => {
   if (currentCall) {
     currentCall.close();
     currentCall = null;
   }
-
-  if (dataConn) {
-    dataConn.close();
-    dataConn = null;
-  }
-
-  if (peer) {
-    peer.destroy();
-    peer = null;
-  }
-
-  if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
-  }
-
   if (screenStream) {
     screenStream.getTracks().forEach(track => track.stop());
     screenStream = null;
   }
-
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
   originalVideoTrack = null;
   micOn = true;
   cameraOn = true;
-
   $("localVideo").srcObject = null;
   $("localPlaceholder").style.display = "flex";
-
   resetRemote();
-
-  [
-    "micBtn",
-    "cameraBtn",
-    "shareBtn",
-    "endBtn"
-  ].forEach(id => {
+  ["micBtn","cameraBtn","shareBtn","endBtn"].forEach(id => {
     $(id).disabled = true;
     $(id).classList.remove("active");
   });
-
   $("micBtn").querySelector("small").textContent = "Mute";
   $("cameraBtn").querySelector("small").textContent = "Camera off";
   $("shareBtn").querySelector("small").textContent = "Share screen";
-
-  $("createBtn").disabled = false;
-  $("joinBtn").disabled = false;
-  $("createBtn").textContent = "Create a room";
-
-  $("myCodeLabel").textContent =
-    "Your room code will appear here.";
-
-  $("copyBtn").disabled = true;
-
-  $("chatInput").disabled = true;
-  $("sendBtn").disabled = true;
-
-  setStatus("You left the room");
-  setCallState("WAITING TO CONNECT");
+  setStatus("Call ended — your side is still online");
+  setRoleStatus(mySide ? mySide + " side is online ♡ Call again whenever you like." : "Choose YE or MYAT.");
 });
 
 // INITIAL EVENTS
@@ -531,7 +496,7 @@ const movieProgressBar = $("movieProgressBar");
 let movieSyncLock = false;
 let incomingMovie = null;
 let movieObjectUrl = null;
-const MOVIE_CHUNK_SIZE = 64 * 1024;
+const MOVIE_CHUNK_SIZE = 16 * 1024;
 const MOVIE_MAX_SIZE = 250 * 1024 * 1024;
 
 function movieSay(message) {
@@ -574,10 +539,16 @@ movieInput.addEventListener("change", async () => {
     dataConn.send({type:"movie-start", name:file.name, mime:file.type || "video/mp4", size:file.size, total});
     for (let i=0;i<total;i++) {
       if (!dataConn || !dataConn.open) throw new Error("Connection closed during transfer.");
+      // Backpressure prevents queuing the entire movie in browser memory.
+      while (dataConn && dataConn.open && dataConn.dataChannel &&
+             dataConn.dataChannel.bufferedAmount > 512 * 1024) {
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      if (!dataConn || !dataConn.open) throw new Error("Connection closed during transfer.");
       const chunk = file.slice(i*MOVIE_CHUNK_SIZE, Math.min(file.size,(i+1)*MOVIE_CHUNK_SIZE));
       dataConn.send(chunk);
       movieProgressBar.style.width = Math.round(((i+1)/total)*100)+"%";
-      if (i % 8 === 0) await new Promise(resolve => setTimeout(resolve, 12));
+      if (i % 4 === 0) await new Promise(resolve => setTimeout(resolve, 8));
     }
     dataConn.send({type:"movie-end", name:file.name});
     movieSay("Movie sent to your partner ♡");
@@ -663,12 +634,17 @@ function updateRoleButtons() {
 }
 
 function tryDataConnection() {
-  if (!peer || !peer.open || !partnerPeerId) return;
-  if (dataConn) return;
+  // YE alone initiates the data channel; MYAT waits for the incoming connection.
+  if (mySide !== "YE" || !peer || !peer.open || !partnerPeerId) return;
+  if (dataConn && dataConn.open) return;
+  if (dataConn && !dataConn.open) dataConn = null;
   const conn = peer.connect(partnerPeerId, {reliable:true});
   attachConnection(conn);
   conn.on("open", () => setRoleStatus("Partner connected ♡ You can chat and share a movie."));
-  conn.on("error", err => console.warn("Auto data connection:", err));
+  conn.on("error", err => {
+    console.warn("Auto data connection:", err);
+    if (dataConn === conn) dataConn = null;
+  });
 }
 
 async function selectSide(side) {
@@ -688,13 +664,12 @@ async function selectSide(side) {
   partnerPeerId = side === "YE" ? MYAT_PEER_ID : YE_PEER_ID;
   localStorage.setItem("ldr-side", side);
   updateRoleButtons();
-  setRoleStatus("Starting " + side + " side… allow camera and microphone if asked.");
+  setRoleStatus("Starting " + side + " side… camera and microphone will stay off until a call.");
   busy = true;
   try {
-    await getMedia();
     const myPeerId = side === "YE" ? YE_PEER_ID : MYAT_PEER_ID;
     await setupPeer(myPeerId);
-    setRoleStatus(side + " side is online ♡ Waiting for your partner…");
+    setRoleStatus(side + " side is online ♡ Camera and microphone are off until you call.");
     updateRoleButtons();
     // Re-attempt the data channel when the other person comes online.
     dataRetryTimer = setInterval(tryDataConnection, 5000);
@@ -715,6 +690,10 @@ $("chooseYeBtn").addEventListener("click", () => selectSide("YE"));
 $("chooseMyatBtn").addEventListener("click", () => selectSide("MYAT"));
 $("changeSideBtn").addEventListener("click", () => {
   if (currentCall) currentCall.close();
+  if (localStream) localStream.getTracks().forEach(track => track.stop());
+  localStream = null;
+  if (screenStream) screenStream.getTracks().forEach(track => track.stop());
+  screenStream = null;
   if (dataConn) dataConn.close();
   if (peer) peer.destroy();
   if (dataRetryTimer) clearInterval(dataRetryTimer);
@@ -730,8 +709,11 @@ $("callPartnerBtn").addEventListener("click", async () => {
     return;
   }
   try {
+    setRoleStatus("Turning on camera and microphone for your call…");
+    const stream = await getMedia();
+    enableControls();
     if (currentCall && currentCall.open) currentCall.close();
-    currentCall = peer.call(partnerPeerId, localStream);
+    currentCall = peer.call(partnerPeerId, stream);
     if (!currentCall) throw new Error("Call could not be started.");
     setCallState("CALLING YOUR PERSON…");
     setRoleStatus("Calling " + (mySide === "YE" ? "MYAT" : "YE") + "…");
