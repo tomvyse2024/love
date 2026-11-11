@@ -1,44 +1,245 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<meta name="theme-color" content="#080b18">
-<title>SHADOW NINJA</title>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#100b1c">
+  <title>TOM & LOVE | LDR Room</title>
+
+  <link rel="stylesheet" href="style.css">
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
+
 <body>
-<div class="game-container">
-  <header>
-    <div class="logo">SHADOW <span>NINJA</span></div>
-    <div class="stats">
-      <span>⭐ <b id="score">0</b></span>
-      <span>❤️ <b id="health">3</b></span>
-      <span>👹 <b id="bossHealth">—</b></span>
-    </div>
-  </header>
-  <div class="game-box">
-    <canvas id="gameCanvas" width="900" height="500"></canvas>
-    <div id="startScreen" class="screen">
-      <h1>SHADOW NINJA</h1><p>DEFEAT THE DEMON BOSS</p>
-      <p class="hint">Move: ◀ ▶ &nbsp; Jump: ▲ &nbsp; Attack: ⚔</p>
-      <button id="startBtn">START GAME</button>
-    </div>
-    <div id="gameOverScreen" class="screen hidden">
-      <h1>GAME OVER</h1><p>YOUR SCORE: <span id="finalScore">0</span></p>
-      <button id="restartBtn">PLAY AGAIN</button>
-    </div>
-    <div id="winScreen" class="screen hidden">
-      <h1>VICTORY!</h1><p>The Demon Boss has been defeated.</p>
-      <button id="nextBtn">PLAY AGAIN</button>
-    </div>
-  </div>
-  <div class="mobile-controls">
-    <div class="movement"><button id="leftBtn">◀</button><button id="rightBtn">▶</button></div>
-    <div class="actions"><button id="attackBtn">⚔</button><button id="jumpBtn">⬆</button></div>
-  </div>
-  <footer>MOBILE ADVENTURE • SOUND ON AFTER START</footer>
-</div>
-<script src="game.js"></script>
+
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <main class="app">
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-icon">♥</span>
+        <span>TOM <i>&</i> LOVE</span>
+      </div>
+
+      <div class="status">
+        <span class="status-dot"></span>
+        <span id="statusText">Ready for love</span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">A LITTLE PLACE FOR TWO HEARTS</p>
+
+      <h1>
+        Distance means so little<br>
+        when <em>someone means so much.</em>
+      </h1>
+
+      <p class="subtitle">
+        Your own little corner of the internet.
+        Just you, your person, and a little less distance.
+      </p>
+    </section>
+
+    <!-- ROOM SECTION -->
+    <section class="card room-card">
+
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">YOUR PRIVATE SPACE</p>
+          <h2>Couple Room</h2>
+        </div>
+
+        <span class="private-label">✦ PRIVATE ROOM</span>
+      </div>
+
+      <div class="input-grid">
+
+        <div class="field">
+          <label>ROOM CODE</label>
+          <input
+            id="roomCode"
+            placeholder="Enter your partner's code"
+            autocomplete="off"
+          >
+        </div>
+
+        <div class="field">
+          <label>YOUR NAME</label>
+          <input
+            id="nickname"
+            maxlength="20"
+            placeholder="Your nickname"
+          >
+        </div>
+
+      </div>
+
+      <div class="button-row">
+        <button class="btn primary" id="createBtn">
+          Create a room
+        </button>
+
+        <button class="btn secondary" id="joinBtn">
+          Join with code
+        </button>
+      </div>
+
+      <div class="share-row">
+        <span id="myCodeLabel">
+          Your room code will appear here.
+        </span>
+
+        <button class="copy-btn" id="copyBtn" disabled>
+          Copy code
+        </button>
+      </div>
+
+      <p class="hint">
+        One person creates a room and shares the code.
+        The other person enters that code to join.
+      </p>
+
+    </section>
+
+    <!-- VIDEO CALL -->
+    <section class="card call-card">
+
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">TOGETHER, EVEN FAR APART</p>
+          <h2>Our little moment</h2>
+        </div>
+
+        <span class="live-label" id="callState">
+          WAITING TO CONNECT
+        </span>
+      </div>
+
+      <div class="video-grid">
+
+        <div class="video-box">
+
+          <video
+            id="remoteVideo"
+            autoplay
+            playsinline
+          ></video>
+
+          <div class="video-placeholder" id="remotePlaceholder">
+            <span>♡</span>
+            <b>Your person will appear here</b>
+            <small>Waiting for them to join...</small>
+          </div>
+
+          <span class="video-label">YOUR PERSON</span>
+
+        </div>
+
+        <div class="video-box self">
+
+          <video
+            id="localVideo"
+            autoplay
+            muted
+            playsinline
+          ></video>
+
+          <div class="video-placeholder" id="localPlaceholder">
+            <span>✧</span>
+            <b>Your camera preview</b>
+            <small>Turn on your camera when ready</small>
+          </div>
+
+          <span class="video-label">YOU</span>
+
+        </div>
+
+      </div>
+
+      <!-- CALL CONTROLS -->
+
+      <div class="controls">
+
+        <button class="control" id="micBtn" disabled>
+          <span>🎙</span>
+          <small>Mute</small>
+        </button>
+
+        <button class="control" id="cameraBtn" disabled>
+          <span>▣</span>
+          <small>Camera off</small>
+        </button>
+
+        <button class="control" id="shareBtn" disabled>
+          <span>▱</span>
+          <small>Share screen</small>
+        </button>
+
+        <button class="control end" id="endBtn" disabled>
+          <span>✕</span>
+          <small>Leave</small>
+        </button>
+
+      </div>
+
+      <p class="call-note">
+        Allow camera and microphone access to start your call.
+        Headphones are recommended.
+      </p>
+
+    </section>
+
+    <!-- CHAT -->
+
+    <section class="card chat-card">
+
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">A NOTE FROM YOU</p>
+          <h2>Little messages</h2>
+        </div>
+
+        <span class="chat-heart">♡</span>
+      </div>
+
+      <div class="messages" id="messages">
+
+        <div class="empty-chat">
+          Your little messages will appear here. Say something sweet ♡
+        </div>
+
+      </div>
+
+      <form id="chatForm" class="chat-form">
+
+        <input
+          id="chatInput"
+          maxlength="500"
+          placeholder="Write a little message..."
+          autocomplete="off"
+          disabled
+        >
+
+        <button type="submit" id="sendBtn" disabled>
+          Send ↗
+        </button>
+
+      </form>
+
+    </section>
+
+    <footer>
+      Made with <span>♥</span> for two people, wherever they are.
+    </footer>
+
+  </main>
+
+  <script src="app.js"></script>
+
 </body>
 </html>
