@@ -216,6 +216,16 @@
 
   </main>
 
+
+    <!-- Hidden legacy elements retained for existing app.js handlers -->
+    <div hidden aria-hidden="true">
+      <input id="roomCode"><input id="nickname" value="">
+      <span id="myCodeLabel">Your room code will appear here.</span>
+      <button id="copyBtn" type="button" disabled>Copy code</button>
+      <button id="createBtn" type="button">Create a room</button>
+      <button id="joinBtn" type="button">Join with code</button>
+    </div>
+
   <script src="app.js"></script>
 
 </body>
