@@ -73,6 +73,12 @@ function setTheatreMode(active, source = "remote") {
         document.fullscreenElement === $("localVideo")) {
       document.exitFullscreen?.().catch(() => {});
     }
+    if ($("remoteVideo").webkitDisplayingFullscreen) {
+      $("remoteVideo").webkitExitFullscreen?.();
+    }
+    if ($("localVideo").webkitDisplayingFullscreen) {
+      $("localVideo").webkitExitFullscreen?.();
+    }
     $("remoteVideo").controls = false;
     setCallState("WAITING FOR MOVIE SHARE");
   }
@@ -84,6 +90,9 @@ async function toggleTheatreFullscreen() {
   const activeVideo = isLocalSharer ? $("localVideo") : $("remoteVideo");
 
   try {
+    // A tap on this button also gives the browser a user gesture to start audio.
+    activeVideo.play().catch(() => {});
+    if (isLocalSharer) $("remoteAudio").play().catch(() => {});
     if (document.fullscreenElement) {
       await document.exitFullscreen();
       return;
@@ -233,7 +242,7 @@ function bindCallEvents(call, direction) {
       // The sharer receives the partner's microphone through this audio-only stream.
       $("remoteAudio").srcObject = stream;
       $("remoteAudio").play().catch(() => {
-        setRoleStatus("အသံကြားရန် စာမျက်နှာကို တစ်ချက်နှိပ်ပါ။");
+        setRoleStatus("Partner အသံကြားရန် Full screen ခလုတ်ကို တစ်ချက်နှိပ်ပါ။");
       });
       setRoleStatus("Movie ကို မျှဝေနေပါပြီ ♡ Voice chat လည်း ချိတ်ဆက်ပြီးပါပြီ။");
       setStatus("Sharing screen — voice connected", true);
@@ -242,7 +251,9 @@ function bindCallEvents(call, direction) {
 
     // The viewer receives the shared screen video plus the sharer's audio.
     $("remoteVideo").srcObject = stream;
-    $("remoteVideo").play().catch(() => {});
+    $("remoteVideo").play().catch(() => {
+      setRoleStatus("Movie အသံစဖို့ Full screen ကို တစ်ချက်နှိပ်ပါ။");
+    });
     $("remotePlaceholder").style.display = "none";
     $("localVideo").srcObject = null;
     setTheatreMode(true, "remote");
