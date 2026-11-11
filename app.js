@@ -311,7 +311,7 @@ function setupPeer(peerId) {
 function tryDataConnection() {
   // YE alone starts the data channel. MYAT waits for the incoming connection.
   if (mySide !== "YE" || !peer || !peer.open || !partnerPeerId) return;
-  if (dataConn && (dataConn.open || dataConn.opening)) return;
+  if (dataConn) return;
 
   const conn = peer.connect(partnerPeerId, {reliable:true});
   attachConnection(conn);
