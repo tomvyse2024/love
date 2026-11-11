@@ -701,3 +701,31 @@ footer span {
 @media(max-width:620px){
   .notification-row .btn{width:100%}
 }
+
+
+/* Multi-device partner picker */
+.partner-device-row{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  margin-top:12px;
+}
+.partner-device-row label{
+  color:var(--muted);
+  font-size:10px;
+  letter-spacing:.5px;
+  text-transform:uppercase;
+}
+.partner-device-row select{
+  width:100%;
+  min-height:44px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#170f23;
+  color:var(--white);
+  font:500 12px 'DM Sans',sans-serif;
+  outline:none;
+}
+.partner-device-row select:focus{border-color:var(--pink);box-shadow:0 0 0 2px rgba(242,138,181,.12)}
+.partner-device-row select:disabled{opacity:.55}
