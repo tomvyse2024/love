@@ -6,5 +6,13 @@
   "display": "standalone",
   "background_color": "#100b1c",
   "theme_color": "#100b1c",
-  "description": "A private little room for two hearts."
+  "description": "A private little room for two hearts.",
+  "icons": [
+    {
+      "src": "heart-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }
