@@ -78,10 +78,14 @@ function setTheatreMode(active, source = "remote") {
   card.classList.toggle("local-sharing", active && source === "local");
 
   if (active) {
-    const video = source === "local" ? $("localVideo") : $("remoteVideo");
-    if (video && video.srcObject) video.play().catch(() => {});
+    // Only the receiving device enters theatre mode. The sharer's page must
+    // remain out of the captured screen to prevent an infinite mirror effect.
+    if (source === "remote") {
+      const video = $("remoteVideo");
+      if (video && video.srcObject) video.play().catch(() => {});
+    }
     setCallState("LIVE MOVIE • VOICE ONLY");
-    setStatus("Movie Theatre — camera off, voice only", true);
+    setStatus(source === "local" ? "Sharing screen — voice only" : "Movie Theatre — camera off, voice only", true);
   } else {
     if (document.fullscreenElement === card ||
         document.fullscreenElement === $("remoteVideo") ||
@@ -101,13 +105,12 @@ function setTheatreMode(active, source = "remote") {
 
 async function toggleTheatreFullscreen() {
   const card = $("callCard");
-  const isLocalSharer = card.classList.contains("local-sharing");
-  const activeVideo = isLocalSharer ? $("localVideo") : $("remoteVideo");
+  const activeVideo = $("remoteVideo");
 
   try {
-    // A tap on this button also gives the browser a user gesture to start audio.
+    // Keep playback within the page and fullscreen the theatre container.
+    // This lets CSS fill the phone display without native-video letterboxing.
     activeVideo.play().catch(() => {});
-    if (isLocalSharer) $("remoteAudio").play().catch(() => {});
     if (document.fullscreenElement) {
       await document.exitFullscreen();
       return;
@@ -117,40 +120,20 @@ async function toggleTheatreFullscreen() {
       return;
     }
 
-    if (isLocalSharer) {
-      if (card.requestFullscreen) {
-        try {
-          await card.requestFullscreen({ navigationUI: "hide" });
-        } catch (_) {
-          await card.requestFullscreen();
-        }
-      } else if (activeVideo.requestFullscreen) {
-        await activeVideo.requestFullscreen();
-      } else if (activeVideo.webkitEnterFullscreen) {
-        activeVideo.webkitEnterFullscreen();
-      } else {
-        throw new Error("Fullscreen is not supported by this browser.");
-      }
-      return;
-    }
-
-    // On Android, fullscreen the received video element itself.
-    activeVideo.controls = true;
-    if (activeVideo.requestFullscreen) {
+    if (card.requestFullscreen) {
       try {
-        await activeVideo.requestFullscreen({ navigationUI: "hide" });
+        await card.requestFullscreen({ navigationUI: "hide" });
       } catch (_) {
-        await activeVideo.requestFullscreen();
+        await card.requestFullscreen();
       }
+    } else if (activeVideo.requestFullscreen) {
+      await activeVideo.requestFullscreen();
     } else if (activeVideo.webkitEnterFullscreen) {
       activeVideo.webkitEnterFullscreen();
-    } else if (card.requestFullscreen) {
-      await card.requestFullscreen();
     } else {
       throw new Error("Fullscreen is not supported by this browser.");
     }
   } catch (error) {
-    activeVideo.controls = false;
     console.warn("Fullscreen:", error);
     setRoleStatus("ဒီ Browser မှာ Full screen မရသေးပါ။ Chrome နဲ့ ထပ်စမ်းပါ။");
   }
@@ -582,10 +565,12 @@ async function startMovieShare() {
     audioSender = null;
     findAudioSender(currentCall).catch(error => console.warn("Audio sender:", error));
 
-    $("localVideo").srcObject = screenStream;
+    // Do not render the captured display inside its own captured page.
+    // The stream still goes directly to the partner through PeerJS.
+    $("localVideo").srcObject = null;
     $("localPlaceholder").style.display = "none";
     setSessionControls(true, true);
-    setTheatreMode(true, "local");
+    setTheatreMode(false);
     setRoleStatus("Screen မျှဝေနေပါပြီ။ Myat က လက်ခံတာနဲ့ Movie ကို Live ကြည့်နိုင်ပါပြီ။");
     bindCallEvents(currentCall, "outgoing");
 
