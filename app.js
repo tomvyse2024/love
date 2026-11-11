@@ -754,6 +754,19 @@ $("callPartnerBtn").addEventListener("click", async () => {
 // to re-enable camera/microphone and register the browser with PeerJS.
 const savedSide = localStorage.getItem("ldr-side");
 if (savedSide === "YE" || savedSide === "MYAT") {
-  setRoleStatus("Last time you used " + savedSide + ". Tap its button to come online.");
+  mySide = savedSide;
+  partnerPeerId = savedSide === "YE" ? MYAT_PEER_ID : YE_PEER_ID;
+  setRoleStatus("Restoring your " + savedSide + " side automatically…");
   updateRoleButtons();
+  // Re-register the saved identity on page load. Camera/mic are requested
+  // only when a call arrives or the user starts a call.
+  setupPeer(savedSide === "YE" ? YE_PEER_ID : MYAT_PEER_ID).then(() => {
+    setRoleStatus(savedSide + " side is online ♡ Waiting for your person…");
+    updateRoleButtons();
+    dataRetryTimer = setInterval(tryDataConnection, 5000);
+    tryDataConnection();
+  }).catch(err => {
+    console.warn("Could not restore saved side:", err);
+    setRoleStatus("Tap your " + savedSide + " button to reconnect.");
+  });
 }
