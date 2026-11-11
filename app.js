@@ -71,18 +71,20 @@ async function getMedia() {
   return localStream;
 }
 
-function enableControls() {
-  [
-    "micBtn",
-    "cameraBtn",
-    "shareBtn",
-    "endBtn"
-  ].forEach(id => {
+function enableCallControls() {
+  ["micBtn","cameraBtn","shareBtn","endBtn"].forEach(id => {
     $(id).disabled = false;
   });
+}
 
+function enableChatControls() {
   $("chatInput").disabled = false;
   $("sendBtn").disabled = false;
+}
+
+function enableControls() {
+  enableCallControls();
+  enableChatControls();
 }
 
 function attachConnection(conn) {
@@ -90,7 +92,7 @@ function attachConnection(conn) {
 
   conn.on("open", () => {
     setStatus("Connected with your person", true);
-    enableControls();
+    enableChatControls();
   });
 
   conn.on("data", data => {
@@ -144,12 +146,12 @@ function setupPeer(peerId) {
       try {
         setRoleStatus("Incoming call… turning on camera and microphone to answer.");
         await getMedia();
-        enableControls();
 
         currentCall = call;
         call.answer(localStream);
 
         call.on("stream", stream => {
+          enableControls();
           $("remoteVideo").srcObject = stream;
           $("remotePlaceholder").style.display = "none";
 
@@ -727,13 +729,13 @@ $("callPartnerBtn").addEventListener("click", async () => {
   try {
     setRoleStatus("Turning on camera and microphone for your call…");
     const stream = await getMedia();
-    enableControls();
     if (currentCall && currentCall.open) currentCall.close();
     currentCall = peer.call(partnerPeerId, stream);
     if (!currentCall) throw new Error("Call could not be started.");
     setCallState("CALLING YOUR PERSON…");
     setRoleStatus("Calling " + (mySide === "YE" ? "MYAT" : "YE") + "…");
     currentCall.on("stream", stream => {
+      enableControls();
       $("remoteVideo").srcObject = stream;
       $("remotePlaceholder").style.display = "none";
       setCallState("YOU ARE TOGETHER ♡");
