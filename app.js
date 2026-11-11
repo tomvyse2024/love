@@ -570,6 +570,8 @@ async function startMovieShare() {
     $("localVideo").srcObject = null;
     $("localPlaceholder").style.display = "none";
     setSessionControls(true, true);
+    setCallState("SHARING SCREEN • VOICE ONLY");
+    setStatus("Sharing screen — waiting for partner", true);
     setRoleStatus("Screen မျှဝေနေပါပြီ။ Myat က လက်ခံတာနဲ့ Movie ကို Live ကြည့်နိုင်ပါပြီ။");
     bindCallEvents(currentCall, "outgoing");
 
