@@ -528,7 +528,6 @@ async function startMovieShare() {
     setRoleStatus("အရင်ဆုံး YE သို့မဟုတ် MYAT ကိုရွေးပါ။");
     return;
   }
-  if (!partnerPeerId) { setRoleStatus("Partner ဘက်က Device တစ်ခု Online ဖြစ်လာမှ Share လုပ်နိုင်ပါမယ်။"); return; }
   if (currentCall) return;
 
   $("callPartnerBtn").disabled = true;
