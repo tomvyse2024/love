@@ -26,6 +26,7 @@ let busy = false;
 let movieSyncLock = false;
 let incomingMovie = null;
 let movieObjectUrl = null;
+let theatreControlsTimer = null;
 
 const MOVIE_CHUNK_SIZE = 16 * 1024;
 const MOVIE_MAX_SIZE = 250 * 1024 * 1024;
@@ -87,6 +88,7 @@ function setTheatreMode(active, source = "remote") {
     setCallState("LIVE MOVIE • VOICE ONLY");
     setStatus(source === "local" ? "Sharing screen — voice only" : "Movie Theatre — camera off, voice only", true);
   } else {
+    hideTheatreControls();
     if (document.fullscreenElement === card ||
         document.fullscreenElement === $("remoteVideo") ||
         document.fullscreenElement === $("localVideo")) {
@@ -133,11 +135,44 @@ async function toggleTheatreFullscreen() {
     } else {
       throw new Error("Fullscreen is not supported by this browser.");
     }
+
+    if (document.fullscreenElement === card) showTheatreControls();
   } catch (error) {
     console.warn("Fullscreen:", error);
     setRoleStatus("ဒီ Browser မှာ Full screen မရသေးပါ။ Chrome နဲ့ ထပ်စမ်းပါ။");
   }
 }
+
+function clearTheatreControlsTimer() {
+  if (theatreControlsTimer) {
+    clearTimeout(theatreControlsTimer);
+    theatreControlsTimer = null;
+  }
+}
+
+function hideTheatreControls() {
+  clearTheatreControlsTimer();
+  $("callCard").classList.remove("controls-visible");
+}
+
+function showTheatreControls() {
+  const card = $("callCard");
+  if (!card.classList.contains("theatre-mode") || document.fullscreenElement !== card) return;
+
+  clearTheatreControlsTimer();
+  card.classList.add("controls-visible");
+  theatreControlsTimer = setTimeout(() => {
+    if (document.fullscreenElement === card) {
+      card.classList.remove("controls-visible");
+    }
+    theatreControlsTimer = null;
+  }, 2000);
+}
+
+// A tap anywhere on the fullscreen movie reveals the floating voice controls.
+$("callCard").addEventListener("pointerdown", () => {
+  if (document.fullscreenElement === $("callCard")) showTheatreControls();
+}, {passive: true});
 
 $("theatreFullscreenBtn").addEventListener("click", toggleTheatreFullscreen);
 
@@ -153,6 +188,9 @@ function updateTheatreFullscreenLabel() {
 
   $("theatreFullscreenBtn").querySelector("small").textContent =
     isFullscreen ? "Exit full screen" : "Full screen";
+
+  if (document.fullscreenElement === card) showTheatreControls();
+  else hideTheatreControls();
 
   if (document.fullscreenElement !== $("remoteVideo") &&
       !$("remoteVideo").webkitDisplayingFullscreen) {
