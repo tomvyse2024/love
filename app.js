@@ -11,7 +11,9 @@ let dataConn = null;
 let dataRetryTimer = null;
 
 let currentCall = null;
-let localStream = null;       // Microphone only — never requests a camera.
+let localStream = null;       // Microphone stream.
+let cameraStream = null;      // Camera is requested only for an explicit Video Call.
+let activeCallKind = null;
 let screenStream = null;      // Shared display video and optional tab audio.
 let screenAudioContext = null;
 let mixedAudioTrack = null;
@@ -47,8 +49,10 @@ function setRoleStatus(message) {
 function updateRoleButtons() {
   $("chooseYeBtn").classList.toggle("selected", mySide === "YE");
   $("chooseMyatBtn").classList.toggle("selected", mySide === "MYAT");
-  $("callPartnerBtn").disabled =
-    !peer || !peer.open || !partnerPeerId || !dataConn || !dataConn.open || !!currentCall;
+  const ready = !!(peer && peer.open && partnerPeerId && dataConn && dataConn.open && !currentCall);
+  $("callPartnerBtn").disabled = !ready;
+  $("videoCallBtn").disabled = !ready;
+  $("phoneCallBtn").disabled = !ready;
 }
 
 function setSessionControls(active, localSharing = false) {
@@ -57,8 +61,10 @@ function setSessionControls(active, localSharing = false) {
   $("shareBtn").disabled = !localSharing;
   $("callCard").classList.toggle("session-active", active);
   $("callCard").classList.toggle("local-sharing", active && localSharing);
-  $("callPartnerBtn").disabled =
-    !peer || !peer.open || !partnerPeerId || !dataConn || !dataConn.open || active;
+  const ready = !!(peer && peer.open && partnerPeerId && dataConn && dataConn.open && !active);
+  $("callPartnerBtn").disabled = !ready;
+  $("videoCallBtn").disabled = !ready;
+  $("phoneCallBtn").disabled = !ready;
 }
 
 function setTheatreMode(active, source = "remote") {
@@ -348,24 +354,51 @@ function attachConnection(conn) {
   });
 }
 
-function bindCallEvents(call, direction) {
+function bindCallEvents(call, direction, kind = "movie-screen-share") {
   call.on("stream", stream => {
-    if (direction === "outgoing") {
-      // The sharer receives the partner's microphone through this audio-only stream.
+    if (kind === "phone-call") {
       $("remoteAudio").srcObject = stream;
-      $("remoteAudio").play().catch(() => {
-        setRoleStatus("Partner အသံကြားရန် Full screen ခလုတ်ကို တစ်ချက်နှိပ်ပါ။");
-      });
+      $("remoteAudio").play().catch(() => setRoleStatus("Partner အသံကြားရန် ဖုန်းမှာ တစ်ချက်နှိပ်ပါ။"));
+      $("remoteVideo").srcObject = null;
+      $("localVideo").srcObject = null;
+      $("callCard").classList.add("phone-call-mode");
+      $("callCard").classList.remove("video-call-mode");
+      $("mediaEyebrow").textContent = "VOICE ONLY • PHONE CALL";
+      $("mediaTitle").textContent = "A Little Phone Call";
+      setCallState("PHONE CALL CONNECTED");
+      setSessionControls(true, false);
+      setStatus("Phone call connected", true);
+      setRoleStatus("Phone Call ချိတ်ဆက်ပြီးပါပြီ ♡ Microphone နဲ့ပဲ စကားပြောနိုင်ပါတယ်။");
+      return;
+    }
+    if (kind === "video-call") {
+      $("remoteAudio").srcObject = null;
+      $("remoteVideo").srcObject = stream;
+      $("remoteVideo").muted = false;
+      $("remoteVideo").play().catch(() => setRoleStatus("Video အသံဖွင့်ရန် Screen ကို တစ်ချက်နှိပ်ပါ။"));
+      $("remotePlaceholder").style.display = "none";
+      $("localVideo").muted = true;
+      $("localVideo").srcObject = cameraStream;
+      $("localPlaceholder").style.display = "none";
+      $("callCard").classList.add("video-call-mode");
+      $("callCard").classList.remove("phone-call-mode", "theatre-mode", "local-sharing");
+      $("mediaEyebrow").textContent = "LIVE VIDEO • CAMERA + MIC";
+      $("mediaTitle").textContent = "Video Call";
+      setCallState("VIDEO CALL CONNECTED");
+      setSessionControls(true, false);
+      setStatus("Video call connected", true);
+      setRoleStatus("Video Call ချိတ်ဆက်ပြီးပါပြီ ♡ Camera နဲ့ Microphone နှစ်ခုလုံး သုံးနေပါတယ်။");
+      return;
+    }
+    if (direction === "outgoing") {
+      $("remoteAudio").srcObject = stream;
+      $("remoteAudio").play().catch(() => setRoleStatus("Partner အသံကြားရန် Full screen ခလုတ်ကို တစ်ချက်နှိပ်ပါ။"));
       setRoleStatus("Movie ကို မျှဝေနေပါပြီ ♡ Voice chat လည်း ချိတ်ဆက်ပြီးပါပြီ။");
       setStatus("Sharing screen — voice connected", true);
       return;
     }
-
-    // The viewer receives the shared screen video plus the sharer's audio.
     $("remoteVideo").srcObject = stream;
-    $("remoteVideo").play().catch(() => {
-      setRoleStatus("Movie အသံစဖို့ Full screen ကို တစ်ချက်နှိပ်ပါ။");
-    });
+    $("remoteVideo").play().catch(() => setRoleStatus("Movie အသံစဖို့ Full screen ကို တစ်ချက်နှိပ်ပါ။"));
     $("remotePlaceholder").style.display = "none";
     $("localVideo").srcObject = null;
     setTheatreMode(true, "remote");
@@ -406,26 +439,37 @@ function setupPeer(peerId) {
     peer.on("connection", conn => attachConnection(conn));
 
     peer.on("call", async call => {
-      if (currentCall) {
-        call.close();
-        return;
-      }
-
+      if (currentCall) { call.close(); return; }
+      const kind = call.metadata && call.metadata.type === "video-call" ? "video-call"
+        : call.metadata && call.metadata.type === "phone-call" ? "phone-call" : "movie-screen-share";
       try {
-        setRoleStatus("Partner က Movie Share လုပ်နေပါတယ်။ Camera မဟုတ်ဘဲ Microphone permission ကို Allow လုပ်ပါ။");
         const microphone = await getMicStream();
+        let answerStream = microphone;
+        if (kind === "video-call") {
+          setRoleStatus("Video Call ဝင်လာပါတယ်။ Camera နဲ့ Microphone permission ကို Allow လုပ်ပါ။");
+          cameraStream = await navigator.mediaDevices.getUserMedia({video:true, audio:false});
+          answerStream = new MediaStream([...cameraStream.getVideoTracks(), ...microphone.getAudioTracks()]);
+          $("localVideo").srcObject = cameraStream;
+          $("localVideo").muted = true;
+          $("localPlaceholder").style.display = "none";
+        } else if (kind === "phone-call") {
+          setRoleStatus("Phone Call ဝင်လာပါတယ်။ Microphone permission ကို Allow လုပ်ပါ။");
+        } else {
+          setRoleStatus("Partner က Movie Share လုပ်နေပါတယ်။ Camera မဟုတ်ဘဲ Microphone permission ကို Allow လုပ်ပါ။");
+        }
         currentCall = call;
+        activeCallKind = kind;
         audioSender = null;
-        call.answer(microphone);
+        call.answer(answerStream);
         findAudioSender(call).catch(error => console.warn("Audio sender:", error));
         setSessionControls(true, false);
-        setCallState("CONNECTING TO MOVIE…");
-        bindCallEvents(call, "incoming");
+        setCallState(kind === "video-call" ? "CONNECTING VIDEO CALL…" : kind === "phone-call" ? "CONNECTING PHONE CALL…" : "CONNECTING TO MOVIE…");
+        bindCallEvents(call, "incoming", kind);
       } catch (error) {
-        console.error("Microphone permission:", error);
+        console.error("Incoming call permission:", error);
         call.close();
         await endSession(false);
-        setRoleStatus("Voice အတွက် Microphone permission ကို Allow လုပ်ပေးပါ။ Camera permission မလိုပါ။");
+        setRoleStatus(kind === "video-call" ? "Video Call အတွက် Camera နဲ့ Microphone permission ကို Allow လုပ်ပါ။" : "Microphone permission ကို Allow လုပ်ပေးပါ။");
       }
     });
 
@@ -504,6 +548,7 @@ async function startMovieShare() {
     currentCall = peer.call(partnerPeerId, outgoingStream, {
       metadata: {type:"movie-screen-share"}
     });
+    activeCallKind = "movie-screen-share";
     if (!currentCall) throw new Error("Could not start the screen stream.");
     audioSender = null;
     findAudioSender(currentCall).catch(error => console.warn("Audio sender:", error));
@@ -528,6 +573,7 @@ async function startMovieShare() {
 async function endSession(closeCall = true) {
   const call = currentCall;
   currentCall = null;
+  activeCallKind = null;
 
   if (closeCall && call) {
     try { call.close(); } catch (_) {}
@@ -541,6 +587,10 @@ async function endSession(closeCall = true) {
       try { track.stop(); } catch (_) {}
     });
   }
+
+  const camera = cameraStream;
+  cameraStream = null;
+  if (camera) camera.getTracks().forEach(track => { try { track.stop(); } catch (_) {} });
 
   const microphone = localStream;
   localStream = null;
@@ -570,7 +620,12 @@ async function endSession(closeCall = true) {
 
   $("remoteAudio").srcObject = null;
   $("remoteVideo").srcObject = null;
+  $("remoteVideo").muted = false;
   $("localVideo").srcObject = null;
+  $("localVideo").muted = true;
+  $("callCard").classList.remove("phone-call-mode", "video-call-mode");
+  $("mediaEyebrow").textContent = "LIVE SCREEN • VOICE ONLY";
+  $("mediaTitle").textContent = "Our Movie Theatre";
   $("remotePlaceholder").style.display = "flex";
   $("localPlaceholder").style.display = "flex";
 
@@ -584,7 +639,58 @@ async function endSession(closeCall = true) {
   updateRoleButtons();
 }
 
+async function startDirectCall(kind) {
+  if (!peer || !peer.open || !partnerPeerId || !dataConn || !dataConn.open) {
+    setRoleStatus("နှစ်ယောက်လုံး Side ရွေးပြီး ချိတ်ဆက်ထားမှ ခေါ်ဆိုနိုင်ပါတယ်。");
+    return;
+  }
+  if (currentCall) return;
+  const videoCall = kind === "video-call";
+  const button = videoCall ? $("videoCallBtn") : $("phoneCallBtn");
+  button.disabled = true;
+  try {
+    setRoleStatus(videoCall ? "Camera နဲ့ Microphone permission တောင်းနေပါတယ်…" : "Microphone permission တောင်းနေပါတယ်…");
+    const microphone = await getMicStream();
+    let outgoingStream = microphone;
+    if (videoCall) {
+      cameraStream = await navigator.mediaDevices.getUserMedia({video:true, audio:false});
+      outgoingStream = new MediaStream([...cameraStream.getVideoTracks(), ...microphone.getAudioTracks()]);
+      $("localVideo").srcObject = cameraStream;
+      $("localVideo").muted = true;
+      $("localPlaceholder").style.display = "none";
+      $("callCard").classList.add("video-call-mode");
+      $("callCard").classList.remove("phone-call-mode", "theatre-mode", "local-sharing");
+      $("mediaEyebrow").textContent = "LIVE VIDEO • CAMERA + MIC";
+      $("mediaTitle").textContent = "Video Call";
+    }
+    currentCall = peer.call(partnerPeerId, outgoingStream, {metadata:{type:kind}});
+    if (!currentCall) throw new Error("Could not start the call.");
+    activeCallKind = kind;
+    audioSender = null;
+    findAudioSender(currentCall).catch(error => console.warn("Audio sender:", error));
+    setSessionControls(true, false);
+    setCallState(videoCall ? "CALLING VIDEO…" : "CALLING PHONE…");
+    setStatus(videoCall ? "Starting video call…" : "Starting phone call…", true);
+    if (!videoCall) {
+      $("callCard").classList.add("phone-call-mode");
+      $("callCard").classList.remove("video-call-mode", "theatre-mode", "local-sharing");
+      $("mediaEyebrow").textContent = "VOICE ONLY • PHONE CALL";
+      $("mediaTitle").textContent = "A Little Phone Call";
+    }
+    bindCallEvents(currentCall, "outgoing", kind);
+    setRoleStatus(videoCall ? "Video Call ခေါ်နေပါပြီ။ Partner လက်ခံတာကို စောင့်နေပါတယ်။" : "Phone Call ခေါ်နေပါပြီ။ Partner လက်ခံတာကို စောင့်နေပါတယ်။");
+  } catch (error) {
+    console.error("Start direct call:", error);
+    await endSession(false);
+    setRoleStatus(videoCall ? "Video Call မစနိုင်ပါ။ Camera နဲ့ Microphone permission ကို စစ်ပါ။" : "Phone Call မစနိုင်ပါ။ Microphone permission ကို စစ်ပါ။");
+  } finally {
+    button.disabled = false;
+    updateRoleButtons();
+  }
+}
 $("callPartnerBtn").addEventListener("click", startMovieShare);
+$("videoCallBtn").addEventListener("click", () => startDirectCall("video-call"));
+$("phoneCallBtn").addEventListener("click", () => startDirectCall("phone-call"));
 $("shareBtn").addEventListener("click", () => endSession());
 $("endBtn").addEventListener("click", () => endSession());
 
