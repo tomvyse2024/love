@@ -180,7 +180,7 @@ function attachConnection(conn) {
   conn.on("open", () => {
     setStatus("Connected with your person", true);
     enableChatControls();
-    if (isScreenSharing) sendScreenShareState(true);
+    sendScreenShareState(isScreenSharing);
   });
 
   conn.on("data", data => {
