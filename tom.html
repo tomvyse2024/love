@@ -1,0 +1,240 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#100b1c">
+  <title>TOM & LOVE | LDR Room</title>
+
+  <link rel="icon" type="image/svg+xml" href="heart-icon.svg">
+  <link rel="stylesheet" href="style.css">
+
+  <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <style>
+    body[data-side] .role-help,
+    body[data-side] .role-buttons,
+    body[data-side] .side-row { display: none !important; }
+  </style>
+</head>
+
+<body data-side="YE">
+
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <main class="app">
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-icon">♥</span>
+        <span>TOM <i>&</i> LOVE</span>
+      </div>
+
+      <div class="status">
+        <span class="status-dot"></span>
+        <span id="statusText">Ready for love</span>
+      </div>
+    </header>
+
+    <section class="hero">
+      <p class="eyebrow">A LITTLE PLACE FOR TWO HEARTS</p>
+
+      <h1>
+        Distance means so little<br>
+        when <em>someone means so much.</em>
+      </h1>
+
+      <p class="subtitle">
+        Your own little corner of the internet.
+        Just you, your person, and a little less distance.
+      </p>
+    </section>
+
+    <!-- YE & MYAT AUTO ROOM -->
+    <section class="card room-card">
+      <div class="section-heading">
+        <div><p class="eyebrow">JUST THE TWO OF US</p><h2>Choose your side</h2></div>
+        <span class="private-label">♡ OUR ROOM</span>
+      </div>
+      <p class="role-help">ကိုယ့်ဘက်က နာမည်ကို တစ်ကြိမ်ရွေးပါ။ Room Code မလိုတော့ပါဘူး။</p>
+      <div class="role-buttons">
+        <button class="role-btn" id="chooseYeBtn" type="button"><span>♡</span><b>YE</b><small>This is my side</small></button>
+        <button class="role-btn" id="chooseMyatBtn" type="button"><span>♡</span><b>MYAT</b><small>This is my side</small></button>
+      </div>
+      <div class="role-status" id="roleStatus" role="status">Choose YE or MYAT to connect to your own side.</div>
+      <div class="partner-device-row"><label for="partnerDeviceSelect">Partner's online device</label><select id="partnerDeviceSelect" disabled><option value="">Choose your side first</option></select></div>
+      <div class="button-row call-options">
+        <button class="btn primary" id="callPartnerBtn" type="button" disabled>▶ Movie Share</button>
+        <button class="btn video-call-btn" id="videoCallBtn" type="button" disabled>▣ Video Call</button>
+        <button class="btn phone-call-btn" id="phoneCallBtn" type="button" disabled>☎ Phone Call</button>
+      </div>
+      <div class="button-row side-row">
+        <button class="btn secondary" id="changeSideBtn" type="button">Change side</button>
+      </div>
+      <p class="hint">Movie Share = Screen + Voice သီးသန့်။ Video Call = Camera + Mic။ Phone Call = Mic only။ နှစ်ယောက်လုံး Side ရွေးပြီး ချိတ်ဆက်ထားမှ ခေါ်ဆိုနိုင်ပါတယ်။</p>
+    </section>
+
+    <!-- VIDEO CALL -->
+    <section class="card call-card" id="callCard">
+
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow" id="mediaEyebrow">LIVE SCREEN • VOICE ONLY</p>
+          <h2 id="mediaTitle">Our Movie Theatre</h2>
+        </div>
+
+        <span class="live-label" id="callState">
+          WAITING FOR MOVIE SHARE
+        </span>
+      </div>
+
+      <div class="video-grid">
+
+        <div class="video-box remote-screen">
+
+          <video
+            id="remoteVideo"
+            autoplay
+            playsinline
+          ></video>
+
+          <div class="video-placeholder" id="remotePlaceholder">
+            <span>♡</span>
+            <b>Your shared movie appears here</b>
+            <small>Waiting for screen sharing...</small>
+          </div>
+
+          <span class="video-label">SHARED MOVIE</span>
+
+        </div>
+
+        <div class="video-box self">
+
+          <video
+            id="localVideo"
+            autoplay
+            muted
+            playsinline
+          ></video>
+
+          <div class="video-placeholder" id="localPlaceholder">
+            <span>✧</span>
+            <b>Your screen preview</b>
+            <small>Your shared screen appears here</small>
+          </div>
+
+          <span class="video-label">YOUR SCREEN</span>
+
+        </div>
+
+      </div>
+
+      <button class="theatre-fullscreen-btn" id="theatreFullscreenBtn" type="button" aria-label="Toggle full screen">
+        <span>⛶</span><small>Full screen</small>
+      </button>
+
+      <audio id="remoteAudio" autoplay hidden></audio>
+
+      <!-- MOVIE CONTROLS -->
+
+      <div class="controls">
+
+        <button class="control" id="micBtn" disabled>
+          <span>🎙</span>
+          <small>Mute</small>
+        </button>
+
+        <button class="control" id="shareBtn" disabled>
+          <span>▱</span>
+          <small>Stop sharing</small>
+        </button>
+
+        <button class="control end" id="endBtn" disabled>
+          <span>✕</span>
+          <small>End movie</small>
+        </button>
+
+      </div>
+
+      <p class="call-note">
+        Camera ကို လုံးဝမဖွင့်ပါ။ Mute နှိပ်တာနဲ့ Microphone ကို စက်ထဲကပါ ပိတ်ပြီး Unmute နှိပ်မှ ပြန်ဖွင့်မယ်။ Screen ကို Live Video အဖြစ်မျှဝေပြီး ကြည့်သူက Full screen နှိပ်ကာ ဖုန်းကို အလျားလိုက်လှည့်ပါ။ Movie အသံအတွက် Chrome Tab ရွေးပြီး Share tab audio ကိုဖွင့်ပါ။
+      </p>
+
+    </section>
+
+
+    <!-- MOVIE ROOM V2 -->
+    <section class="card movie-card" id="movieRoom">
+      <div class="section-heading">
+        <div><p class="eyebrow">MOVIE NIGHT, TOGETHER</p><h2>Our little cinema</h2></div>
+        <span class="private-label">♡ WATCH TOGETHER</span>
+      </div>
+      <p class="movie-help">Choose a video from your device. When connected, the file is sent privately to your partner so both of you can watch and hear it in sync.</p>
+      <div class="movie-actions">
+        <input id="movieFile" type="file" accept="video/*,.mp4,.webm,.mov,.m4v" hidden>
+        <button class="btn primary" id="movieChooseBtn" type="button">＋ Upload a movie</button>
+        <span id="movieFileName">No movie selected</span>
+      </div>
+      <div class="movie-progress" id="movieProgress" hidden><div id="movieProgressBar"></div></div>
+      <p class="movie-status" id="movieStatus" role="status">Upload a video to start your movie night.</p>
+      <video id="moviePlayer" controls playsinline preload="metadata"></video>
+      <p class="movie-footnote">Both people receive a temporary copy in their browser. Keep this page open while watching. Large files may take time to transfer.</p>
+    </section>
+
+    <!-- CHAT -->
+
+    <section class="card chat-card">
+
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">A NOTE FROM YOU</p>
+          <h2>Little messages</h2>
+        </div>
+
+        <span class="chat-heart">♡</span>
+      </div>
+
+      <div class="messages" id="messages">
+
+        <div class="empty-chat">
+          Your little messages will appear here. Say something sweet ♡
+        </div>
+
+      </div>
+
+      <form id="chatForm" class="chat-form">
+
+        <input
+          id="chatInput"
+          maxlength="500"
+          placeholder="Write a little message..."
+          autocomplete="off"
+          disabled
+        >
+
+        <button type="submit" id="sendBtn" disabled>
+          Send ↗
+        </button>
+
+      </form>
+
+    </section>
+
+    <footer>
+      Made with <span>♥</span> for two people, wherever they are.
+    </footer>
+
+  </main>
+
+
+  <script src="app.js"></script>
+
+</body>
+</html>
