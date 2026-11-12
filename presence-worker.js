@@ -82,6 +82,42 @@ export default {
     const body = await readBody(request);
     if (!(await authenticate(body, env))) return json({ error: "Unauthorized" }, 401);
 
+    // Generate short-lived TURN credentials. Long-lived TURN secrets stay in Worker Secrets.
+    if (url.pathname === "/ice-servers") {
+      if (!env.TURN_KEY_ID || !env.TURN_API_TOKEN) {
+        return json({ error: "TURN_KEY_ID and TURN_API_TOKEN Worker secrets are not configured." }, 503);
+      }
+
+      try {
+        const turnResponse = await fetch(
+          `https://rtc.live.cloudflare.com/v1/turn/keys/${encodeURIComponent(env.TURN_KEY_ID)}/credentials/generate-ice-servers`,
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${env.TURN_API_TOKEN}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ ttl: 86400 })
+          }
+        );
+
+        const turnData = await turnResponse.json().catch(() => ({}));
+        if (!turnResponse.ok) {
+          console.error("Cloudflare TURN credential error:", turnResponse.status);
+          return json({ error: `Cloudflare TURN credential generation failed (HTTP ${turnResponse.status}).` }, 502);
+        }
+
+        if (!Array.isArray(turnData.iceServers) || turnData.iceServers.length === 0) {
+          return json({ error: "Cloudflare returned no ICE servers." }, 502);
+        }
+
+        return json({ ok: true, iceServers: turnData.iceServers, expiresIn: 86400 });
+      } catch (error) {
+        console.error("TURN credential request failed:", error);
+        return json({ error: "Could not generate TURN credentials." }, 502);
+      }
+    }
+
     if (url.pathname === "/register") {
       const { side, deviceId, peerId, label } = body;
       if (!validSide(side) || !deviceId || !peerId) {
