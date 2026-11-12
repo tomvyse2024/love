@@ -14,9 +14,6 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js"></script>
 
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
@@ -67,10 +64,6 @@
       </div>
       <div class="role-status" id="roleStatus" role="status">Choose YE or MYAT to connect to your own side.</div>
       <div class="partner-device-row"><label for="partnerDeviceSelect">Partner's online device</label><select id="partnerDeviceSelect" disabled><option value="">Choose your side first</option></select></div>
-      <div class="notification-row">
-        <button class="btn secondary" id="enableNotificationsBtn" type="button">♡ Enable Call Notifications</button>
-        <small id="notificationStatus">Enable alerts so your partner can reach you.</small>
-      </div>
       <div class="button-row call-options">
         <button class="btn primary" id="callPartnerBtn" type="button" disabled>▶ Movie Share</button>
         <button class="btn video-call-btn" id="videoCallBtn" type="button" disabled>▣ Video Call</button>
