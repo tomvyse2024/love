@@ -1,13 +1,18 @@
 
 const $ = id => document.getElementById(id);
 
-const PRESENCE_WORKER = "https://tom-love-presence.kotom2003mdy.workers.dev";
-const DEVICE_ID_PREFIX = "tom-love-device-id-";
-let peer = null, mySide = null, localPeerId = null, localDeviceId = null;
-let localDeviceLabel = "Device", partnerPeerId = null, partnerDevices = [];
+// Fixed room IDs for the dedicated TOM and MYAT pages.
+const PEER_IDS = {
+  YE_MAC: "tomlove-ye-mac-7f4b8d21c6a94e3b",
+  MYAT_ANDROID: "tomlove-myat-android-91c2e7a54b6d8f30",
+  MYAT_WINDOWS: "tomlove-myat-windows-3a8f1c6d9e2b7450",
+  MYAT_OTHER: "tomlove-myat-other-6d2a9f4b8c1e7350"
+};
+let peer = null, mySide = null, localPeerId = null;
+let partnerPeerId = null, partnerDevices = [];
 let dataConn = null;
 const dataConnections = new Map();
-let dataRetryTimer = null, heartbeatTimer = null, presenceCode = null;
+let dataRetryTimer = null;
 
 let currentCall = null;
 let localStream = null;       // Microphone stream.
@@ -439,27 +444,16 @@ async function setupPeer(peerId) {
     throw new Error("PeerJS could not load.");
   }
 
-  // Request temporary ICE credentials from the authenticated presence Worker.
-  let turnData;
-  try {
-    turnData = await presenceRequest("/ice-servers", {});
-  } catch (error) {
-    throw new Error(
-      "TURN credentials မရပါ။ Cloudflare Worker Settings ထဲမှာ TURN_KEY_ID နဲ့ TURN_API_TOKEN Secrets ထည့်ပြီး Deploy လုပ်ထားပါ။ (" +
-      (error.message || "TURN service error") + ")"
-    );
-  }
-
-  if (!turnData || !Array.isArray(turnData.iceServers) || turnData.iceServers.length === 0) {
-    throw new Error("TURN server က ICE configuration မပေးနိုင်သေးပါ။ Cloudflare TURN settings ကို စစ်ဆေးပါ။");
-  }
-
   return new Promise((resolve, reject) => {
     let peerOpened = false;
+    // STUN-only WebRTC: no TURN relay and no custom Worker dependency.
     peer = new Peer(peerId, {
       debug: 1,
       config: {
-        iceServers: turnData.iceServers,
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" }
+        ],
         sdpSemantics: "unified-plan"
       }
     });
@@ -543,20 +537,31 @@ async function setupPeer(peerId) {
 
 async function refreshPartnerDevices() {
   if (!mySide) return;
-  try {
-    const r = await presenceRequest("/devices", {side:mySide === "YE" ? "MYAT" : "YE"});
-    partnerDevices = Array.isArray(r.devices) ? r.devices : [];
-    const picker = $("partnerDeviceSelect"), previous = picker ? (picker.value || partnerPeerId) : partnerPeerId;
-    if (picker) {
-      picker.innerHTML = "";
-      if (!partnerDevices.length) { const o=document.createElement("option"); o.value=""; o.textContent="Waiting for partner devices…"; picker.appendChild(o); partnerPeerId=null; }
-      else {
-        partnerDevices.forEach(d => { const o=document.createElement("option"); o.value=d.peerId; o.textContent=d.label || "Partner device"; picker.appendChild(o); });
-        partnerPeerId = partnerDevices.some(d => d.peerId === previous) ? previous : partnerDevices[0].peerId; picker.value=partnerPeerId;
-      }
-    } else partnerPeerId=partnerDevices[0]?.peerId || null;
-    updateRoleButtons();
-  } catch (e) { console.warn("Device discovery:",e); }
+  partnerDevices = mySide === "YE"
+    ? [
+        {peerId: PEER_IDS.MYAT_ANDROID, label: "Myat • Android"},
+        {peerId: PEER_IDS.MYAT_WINDOWS, label: "Myat • Windows"},
+        {peerId: PEER_IDS.MYAT_OTHER, label: "Myat • Other device"}
+      ]
+    : [{peerId: PEER_IDS.YE_MAC, label: "Tom • MacBook"}];
+
+  const picker = $("partnerDeviceSelect");
+  const previous = picker ? (picker.value || partnerPeerId) : partnerPeerId;
+  if (picker) {
+    picker.innerHTML = "";
+    partnerDevices.forEach(device => {
+      const option = document.createElement("option");
+      option.value = device.peerId;
+      option.textContent = device.label;
+      picker.appendChild(option);
+    });
+    partnerPeerId = partnerDevices.some(device => device.peerId === previous)
+      ? previous : partnerDevices[0].peerId;
+    picker.value = partnerPeerId;
+  } else {
+    partnerPeerId = partnerDevices[0]?.peerId || null;
+  }
+  updateRoleButtons();
 }
 async function tryDataConnection() {
   if (!mySide || !peer || peer.destroyed) return;
@@ -621,7 +626,6 @@ async function startMovieShare() {
     if (outgoingAudioTrack) outgoingTracks.push(outgoingAudioTrack);
     const outgoingStream = new MediaStream(outgoingTracks);
 
-    notifyPartnerCall("movie");
     currentCall = peer.call(partnerPeerId, outgoingStream, {
       metadata: {type:"movie-screen-share"}
     });
@@ -743,7 +747,6 @@ async function startDirectCall(kind) {
       $("mediaEyebrow").textContent = "LIVE VIDEO • CAMERA + MIC";
       $("mediaTitle").textContent = "Video Call";
     }
-    notifyPartnerCall(kind === "video-call" ? "video" : "phone");
     currentCall = peer.call(partnerPeerId, outgoingStream, {metadata:{type:kind}});
     if (!currentCall) throw new Error("Could not start the call.");
     activeCallKind = kind;
@@ -790,71 +793,94 @@ $("chatForm").addEventListener("submit", event => {
   input.value = "";
 });
 
-function getPresencePairingCode() {
-  if (presenceCode) return presenceCode;
-  let code=localStorage.getItem("tom-love-pairing-code");
-  if (!code) { code=prompt("Enter your TOM & LOVE pairing code to join the private room:"); if(!code) throw new Error("Pairing code is required."); localStorage.setItem("tom-love-pairing-code",code); }
-  presenceCode=code; return code;
-}
-async function presenceRequest(path,payload={}) {
-  const r=await fetch(PRESENCE_WORKER+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...payload,pairingCode:getPresencePairingCode()})});
-  const data=await r.json().catch(()=>({})); if(!r.ok) throw new Error(data.error || "Presence service request failed."); return data;
-}
-function makeDeviceLabel() {
-  const ua=navigator.userAgent||"";
-  const platform=/Macintosh|Mac OS/.test(ua)?"Mac":/Android/.test(ua)?"Android":/Windows/.test(ua)?"Windows":/iPhone|iPad/.test(ua)?"iPhone/iPad":"Browser";
-  const browser=ua.includes("Edg/")?"Edge":ua.includes("Chrome/")?"Chrome":ua.includes("Firefox/")?"Firefox":ua.includes("Safari/")?"Safari":"Browser";
-  return platform+" • "+browser;
-}
-async function registerPresence(side) {
-  localDeviceId=localStorage.getItem(DEVICE_ID_PREFIX+side);
-  if(!localDeviceId){localDeviceId=crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+Math.random().toString(36).slice(2));localStorage.setItem(DEVICE_ID_PREFIX+side,localDeviceId);}
-  localDeviceLabel=makeDeviceLabel();
-  localPeerId="tom-love-"+side.toLowerCase()+"-"+localDeviceId.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,48);
-  await presenceRequest("/register",{side,deviceId:localDeviceId,peerId:localPeerId,label:localDeviceLabel});
-  if(heartbeatTimer)clearInterval(heartbeatTimer);
-  heartbeatTimer=setInterval(()=>presenceRequest("/heartbeat",{side,deviceId:localDeviceId}).catch(e=>console.warn("Heartbeat:",e)),30000);
-}
 async function stopPresence() {
-  if(heartbeatTimer)clearInterval(heartbeatTimer);heartbeatTimer=null;
-  if(dataRetryTimer)clearInterval(dataRetryTimer);dataRetryTimer=null;
-  if(mySide&&localDeviceId){try{await presenceRequest("/unregister",{side:mySide,deviceId:localDeviceId});}catch(e){console.warn("Unregister:",e);}}
+  if (dataRetryTimer) clearInterval(dataRetryTimer);
+  dataRetryTimer = null;
 }
+
 async function selectSide(side) {
-  if(busy)return;
-  if(peer&&peer.open&&mySide===side){setRoleStatus(side+" side is ready. Partner ကို စောင့်နေပါတယ်…");return;}
-  busy=true;
-  try{
-    await endSession();await stopPresence();
-    for(const c of dataConnections.values()){try{c.close();}catch(_){}}
-    dataConnections.clear();dataConn=null;
-    if(peer){try{peer.destroy();}catch(_){}peer=null;}
-    mySide=side;partnerPeerId=null;localStorage.setItem("ldr-side",side);
-    setRoleStatus("Starting "+side+" side… Camera နဲ့ Microphone မဖွင့်သေးပါ။");setStatus("Connecting your room…");
-    getPresencePairingCode();
-    const id=localStorage.getItem(DEVICE_ID_PREFIX+side)||(crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+Math.random().toString(36).slice(2)));
-    localStorage.setItem(DEVICE_ID_PREFIX+side,id);localDeviceId=id;localDeviceLabel=makeDeviceLabel();
-    localPeerId="tom-love-"+side.toLowerCase()+"-"+id.replace(/[^a-zA-Z0-9_-]/g,"").slice(0,48);
-    await setupPeer(localPeerId);await registerPresence(side);await refreshPartnerDevices();
-    setRoleStatus(side+" side is online ♡ Partner ရဲ့ Device တွေကို ရှာနေပါတယ်။");setStatus("Your side is online",true);updateRoleButtons();
-    dataRetryTimer=setInterval(()=>{tryDataConnection();},8000);tryDataConnection();
-  }catch(e){console.error(e);setRoleStatus(e.message||"Room မချိတ်ဆက်နိုင်ပါ။ ခဏစောင့်ပြီး ထပ်စမ်းပါ။");if(peer){peer.destroy();peer=null;}updateRoleButtons();}
-  finally{busy=false;}
+  if (side !== "YE" && side !== "MYAT") return;
+  if (busy) return;
+  if (peer && peer.open && mySide === side) {
+    setRoleStatus(side + " side is ready. Partner ကို စောင့်နေပါတယ်…");
+    return;
+  }
+  busy = true;
+  try {
+    await endSession();
+    await stopPresence();
+    for (const connection of dataConnections.values()) {
+      try { connection.close(); } catch (_) {}
+    }
+    dataConnections.clear();
+    dataConn = null;
+    if (peer) { try { peer.destroy(); } catch (_) {} peer = null; }
+
+    mySide = side;
+    partnerPeerId = null;
+    localPeerId = side === "YE"
+      ? PEER_IDS.YE_MAC
+      : (/Android/i.test(navigator.userAgent) ? PEER_IDS.MYAT_ANDROID
+        : /Windows/i.test(navigator.userAgent) ? PEER_IDS.MYAT_WINDOWS
+        : PEER_IDS.MYAT_OTHER);
+    localStorage.setItem("ldr-side", side);
+
+    const heading = document.querySelector(".room-card h2");
+    if (heading) heading.textContent = side === "YE" ? "Tom's private room" : "Myat's private room";
+    const roleHelp = document.querySelector(".role-help");
+    if (roleHelp) roleHelp.textContent = side === "YE"
+      ? "Tom ရဲ့ MacBook အတွက် သီးသန့် Room ဖြစ်ပါတယ်။"
+      : "Myat ရဲ့ ဒီ Device အတွက် သီးသန့် Room ဖြစ်ပါတယ်။";
+    const partnerLabel = document.querySelector('label[for="partnerDeviceSelect"]');
+    if (partnerLabel) partnerLabel.textContent = side === "YE"
+      ? "Choose Myat's device" : "Tom's device";
+
+    setRoleStatus("Starting " + side + " side… Camera နဲ့ Microphone မဖွင့်သေးပါ။");
+    setStatus("Connecting to PeerJS Cloud…");
+    await setupPeer(localPeerId);
+    await refreshPartnerDevices();
+    setRoleStatus(side + " side is online ♡ Partner ရဲ့ Device ကို ရွေးပြီး ခေါ်နိုင်ပါပြီ။");
+    setStatus("Your side is online", true);
+    updateRoleButtons();
+    dataRetryTimer = setInterval(() => { tryDataConnection(); }, 8000);
+    tryDataConnection();
+  } catch (error) {
+    console.error(error);
+    setRoleStatus(error.message || "Room မချိတ်ဆက်နိုင်ပါ။ ခဏစောင့်ပြီး ထပ်စမ်းပါ။");
+    if (peer) { peer.destroy(); peer = null; }
+    updateRoleButtons();
+  } finally {
+    busy = false;
+  }
 }
+
 $("chooseYeBtn").addEventListener("click", () => selectSide("YE"));
 $("chooseMyatBtn").addEventListener("click", () => selectSide("MYAT"));
-$("partnerDeviceSelect").addEventListener("change", event => { partnerPeerId=event.target.value||null; updateRoleButtons(); });
-
-$("changeSideBtn").addEventListener("click", async () => {
-  await endSession();await stopPresence();
-  for(const c of dataConnections.values()){try{c.close();}catch(_){}}
-  dataConnections.clear();dataConn=null;
-  if(peer){try{peer.destroy();}catch(_){}peer=null;}
-  mySide=null;localPeerId=null;localDeviceId=null;partnerDevices=[];partnerPeerId=null;
-  const picker=$("partnerDeviceSelect");if(picker)picker.innerHTML='<option value="">Choose your side first</option>';
-  localStorage.removeItem("ldr-side");setRoleStatus("Choose YE or MYAT to connect to your own side.");setStatus("Ready for love");updateRoleButtons();
+$("partnerDeviceSelect").addEventListener("change", event => {
+  partnerPeerId = event.target.value || null;
+  updateRoleButtons();
 });
 
+$("changeSideBtn").addEventListener("click", async () => {
+  await endSession();
+  await stopPresence();
+  for (const connection of dataConnections.values()) {
+    try { connection.close(); } catch (_) {}
+  }
+  dataConnections.clear();
+  dataConn = null;
+  if (peer) { try { peer.destroy(); } catch (_) {} peer = null; }
+  mySide = null;
+  localPeerId = null;
+  partnerDevices = [];
+  partnerPeerId = null;
+  const picker = $("partnerDeviceSelect");
+  if (picker) picker.innerHTML = '<option value="">Choose your side first</option>';
+  localStorage.removeItem("ldr-side");
+  setRoleStatus("Choose YE or MYAT to connect to your own side.");
+  setStatus("Ready for love");
+  updateRoleButtons();
+});
 function movieSay(message) {
   $("movieStatus").textContent = message;
 }
@@ -978,132 +1004,11 @@ setSessionControls(false, false);
 
 
 
-// TOM & LOVE — Firebase push notifications
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBD2lnyijjD4HJsJ1B1j1bvjGRDN0pnP_k",
-  authDomain: "tom-fix-everything.firebaseapp.com",
-  projectId: "tom-fix-everything",
-  storageBucket: "tom-fix-everything.firebasestorage.app",
-  messagingSenderId: "1062380316397",
-  appId: "1:1062380316397:web:4e6b159e8deadcc1570ee4",
-  measurementId: "G-F4TNPMK340"
-};
-const NOTIFY_WORKER = "https://tom-love-notify.kotom2003mdy.workers.dev";
-const FCM_VAPID_KEY = "BKjl5eXbLdSciuFDgaxei8TQPbn9dm4Flx-iIoOkPqaJKVHq-we1Dd_0atp2nVE1hVxzwTN3FbP-BFI2Kgm4680";
-let firebaseMessaging = null;
-let firebaseReady = false;
-let firebaseUser = null;
-
-function setNotificationStatus(message) {
-  const el = $("notificationStatus");
-  if (el) el.textContent = message;
+// Dedicated TOM / MYAT GitHub Pages URLs auto-select their own side.
+const pageSide = document.body.dataset.side;
+if (pageSide === "YE" || pageSide === "MYAT") {
+  selectSide(pageSide);
+} else {
+  const savedSide = localStorage.getItem("ldr-side");
+  if (savedSide === "YE" || savedSide === "MYAT") selectSide(savedSide);
 }
-
-async function initFirebaseNotifications() {
-  if (!window.firebase || !firebase.messaging || typeof firebase.messaging.isSupported !== "function") {
-    throw new Error("This browser does not support Firebase notifications.");
-  }
-  if (!(await firebase.messaging.isSupported())) {
-    throw new Error("This browser does not support Firebase notifications.");
-  }
-  if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
-  const auth = firebase.auth();
-  if (!auth.currentUser) await auth.signInAnonymously();
-  firebaseUser = auth.currentUser;
-  firebaseMessaging = firebase.messaging();
-  firebaseReady = true;
-
-  firebaseMessaging.onMessage(payload => {
-    const title = payload.notification?.title || "♡ TOM & LOVE";
-    const body = payload.notification?.body || "Your person is calling.";
-    if (Notification.permission === "granted") {
-      new Notification(title, {
-        body,
-        icon: "./heart-icon.svg",
-        tag: "tom-love-incoming-call"
-      });
-    }
-    setNotificationStatus("Notifications are enabled ♡");
-  });
-}
-
-async function workerRequest(path, body, pairingCode) {
-  const user = firebase.auth().currentUser;
-  if (!user) throw new Error("Firebase sign-in is not ready.");
-  const idToken = await user.getIdToken();
-  const response = await fetch(NOTIFY_WORKER + path, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + idToken,
-      "X-Pairing-Code": pairingCode
-    },
-    body: JSON.stringify(body)
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || "Notification server error.");
-  return result;
-}
-
-async function enableCallNotifications() {
-  const button = $("enableNotificationsBtn");
-  if (!mySide) {
-    setNotificationStatus("အရင်ဆုံး YE သို့မဟုတ် MYAT ကိုရွေးပါ။");
-    return;
-  }
-  if (!("Notification" in window) || !("serviceWorker" in navigator)) {
-    setNotificationStatus("ဒီ Browser မှာ Web Notifications မရနိုင်ပါ။ Chrome ကိုသုံးပါ။");
-    return;
-  }
-  button.disabled = true;
-  try {
-    setNotificationStatus("Preparing secure notification connection…");
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") throw new Error("Notification permission was not granted.");
-
-    const pairingCode = localStorage.getItem("tom-love-pairing-code") ||
-      prompt("Enter your TOM & LOVE pairing code:");
-    if (!pairingCode) throw new Error("Pairing code is required.");
-    localStorage.setItem("tom-love-pairing-code", pairingCode);
-
-    await initFirebaseNotifications();
-    const registration = await navigator.serviceWorker.register("./firebase-messaging-sw.js");
-    const token = await firebaseMessaging.getToken({
-      vapidKey: FCM_VAPID_KEY,
-      serviceWorkerRegistration: registration
-    });
-    if (!token) throw new Error("Could not create a notification device token.");
-
-    const result = await workerRequest("/register", {side:mySide, token}, pairingCode);
-    setNotificationStatus(result.registered + " device notifications enabled ♡");
-    button.textContent = "✓ Notifications Enabled";
-  } catch (error) {
-    console.error("Enable notifications:", error);
-    setNotificationStatus(error.message || "Could not enable notifications.");
-  } finally {
-    button.disabled = false;
-  }
-}
-
-async function notifyPartnerCall(callType) {
-  try {
-    if (!firebase.apps.length || !firebase.auth().currentUser) return;
-    const pairingCode = localStorage.getItem("tom-love-pairing-code");
-    if (!pairingCode) {
-      setNotificationStatus("Enable Call Notifications first to alert your partner.");
-      return;
-    }
-    await workerRequest("/invite", {from:mySide, callType}, pairingCode);
-  } catch (error) {
-    console.warn("Call notification:", error);
-    setNotificationStatus("Call started, but notification could not be sent: " + error.message);
-  }
-}
-
-if ($("enableNotificationsBtn")) {
-  $("enableNotificationsBtn").addEventListener("click", enableCallNotifications);
-}
-
-// Restore the saved side using this browser's unique device identity.
-const savedSide=localStorage.getItem("ldr-side");
-if(savedSide==="YE"||savedSide==="MYAT")selectSide(savedSide);
