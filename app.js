@@ -434,19 +434,46 @@ function bindCallEvents(call, direction, kind = "movie-screen-share") {
   });
 }
 
-function setupPeer(peerId) {
+async function setupPeer(peerId) {
+  if (!window.Peer) {
+    throw new Error("PeerJS could not load.");
+  }
+
+  // Request temporary ICE credentials from the authenticated presence Worker.
+  let turnData;
+  try {
+    turnData = await presenceRequest("/ice-servers", {});
+  } catch (error) {
+    throw new Error(
+      "TURN credentials မရပါ။ Cloudflare Worker Settings ထဲမှာ TURN_KEY_ID နဲ့ TURN_API_TOKEN Secrets ထည့်ပြီး Deploy လုပ်ထားပါ။ (" +
+      (error.message || "TURN service error") + ")"
+    );
+  }
+
+  if (!turnData || !Array.isArray(turnData.iceServers) || turnData.iceServers.length === 0) {
+    throw new Error("TURN server က ICE configuration မပေးနိုင်သေးပါ။ Cloudflare TURN settings ကို စစ်ဆေးပါ။");
+  }
+
   return new Promise((resolve, reject) => {
-    if (!window.Peer) {
-      reject(new Error("PeerJS could not load."));
-      return;
-    }
+    let peerOpened = false;
+    peer = new Peer(peerId, {
+      debug: 1,
+      config: {
+        iceServers: turnData.iceServers,
+        sdpSemantics: "unified-plan"
+      }
+    });
 
-    peer = new Peer(peerId, {debug:1});
-
-    peer.on("open", id => resolve(id));
+    peer.on("open", id => {
+      peerOpened = true;
+      resolve(id);
+    });
 
     peer.on("error", error => {
       console.error("Peer error:", error);
+      if (!peerOpened) {
+        reject(new Error("PeerJS connection failed: " + (error.type || error.message || "unknown error")));
+      }
       setStatus("Connection error: " + error.type);
       if (error.type === "peer-unavailable") {
         setRoleStatus("Partner ရဲ့ Peer ID ကို ခဏမတွေ့သေးပါ။ အလိုအလျောက် ပြန်ချိတ်နေပါတယ်…");
